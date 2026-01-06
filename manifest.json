@@ -1,0 +1,11 @@
+{
+    "entry": "easyplace.py",
+    "name": "easyplace",
+    "type": "lse-python",
+    "dependencies": [
+        {
+            "name": "legacy-script-engine-python"
+        }
+    ]
+}
+

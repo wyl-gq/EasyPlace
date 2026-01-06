@@ -1,0 +1,17 @@
+{
+    "format_version": 2,
+    "header": {
+        "name": "轻松放置投影材质包",
+        "description": "轻松放置投影材质包",
+        "uuid": "12345678-1234-1234-1234-123456789012",
+        "version": [3, 0, 0],
+        "min_engine_version": [1, 20, 0]
+    },
+    "modules": [
+        {
+            "type": "resources",
+            "uuid": "12345678-1234-1234-1234-123456789013",
+            "version": [1, 0, 0]
+        }
+    ]
+}
