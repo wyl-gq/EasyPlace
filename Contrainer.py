@@ -8,7 +8,7 @@ class Container:
     send_info: bool = True
     
     #盒子太大，缓存盒子内物品信息，减少重复解析
-    box_cache: dict[str, defaultdict] = {}
+    box_cache: dict[str, dict] = {}
 
     def __init__(self, container: LLSE_Container) -> None:
         self.container = container
@@ -56,13 +56,12 @@ class Container:
 
         for shulker in self.shulkers:
             box_nbt: NbtCompound = shulker.getNbt()
-            box_identifier = box_nbt.toSNBT()
+            box_identifier = Item.get_llse_item_identifier(shulker)
             if box_identifier in self.box_cache:
                 if target_item_identifier not in self.box_cache[box_identifier]:
                     continue
             
             if isinstance((box_tag := box_nbt.getTag("tag")), NbtCompound) and isinstance((items_tag := box_tag.getTag("Items")), NbtList):
-                find = False
                 for i in range(items_tag.getSize()):
                     item_nbt = items_tag.getTag(i)
                     if isinstance(item_nbt, NbtCompound):
@@ -72,20 +71,17 @@ class Container:
                             if count >= search_item_count:
                                 search_item.setNull()
                                 count -= search_item_count
+                                items_tag.setTag(i, search_item.getNbt())
                             else:
-                                nbt_count = NbtByte(search_item_count - count)
-                                search_item.setNbt(search_item.getNbt().setTag("Count", nbt_count))
+                                item_nbt.setByte("Count", search_item_count - count)
+                                items_tag.setTag(i, item_nbt)
                                 count -= search_item_count
 
-                            items_tag.setTag(i, search_item.getNbt())
                             if count <= 0:
-                                find = True
+                                box_tag.setTag("Items", items_tag)
+                                box_nbt.setTag("tag", box_tag)
+                                shulker.setNbt(box_nbt)
                                 break
-
-                if find:
-                    box_tag.setTag("Items", items_tag)
-                    box_nbt.setTag("tag", box_tag)
-                    shulker.setNbt(box_nbt)
 
                 if count <= 0:
                     self.existing_items_identifier[target_item_identifier] -= target_item.count
@@ -133,7 +129,7 @@ class Container:
         target_item_identifier = target_item.get_identifier()
         for shulker in self.shulkers:
             box_nbt: NbtCompound = shulker.getNbt()
-            box_identifier = box_nbt.toSNBT()
+            box_identifier = Item.get_llse_item_identifier(shulker)
             if box_identifier in self.box_cache:
                 if target_item_identifier not in self.box_cache[box_identifier]:
                     continue
@@ -145,8 +141,6 @@ class Container:
                         if target_item.match(item_nbt):
                             item_nbt.setByte('Count', target_item.count)
                             return mc.newItem(item_nbt)
-
-        return None
 
     def shift_item_to(self, target_item: Item, new_item: LLSE_Item, check: bool = True) -> bool:
         if self.current_player_mode == PlayerGameMode.creative:
@@ -168,7 +162,7 @@ class Container:
 
         for shulker in self.shulkers:
             box_nbt: NbtCompound = shulker.getNbt()
-            box_identifier = box_nbt.toSNBT()
+            box_identifier = Item.get_llse_item_identifier(box_nbt)
             if box_identifier in self.box_cache and target_item_identifier not in self.box_cache[box_identifier]:
                 continue
                 
@@ -178,7 +172,12 @@ class Container:
                     if isinstance(item_nbt, NbtCompound):
                         search_item = mc.newItem(item_nbt)
                         if search_item is not None and target_item.match(search_item):
+                            slot = item_nbt.getTag('Slot')
                             items_tag.setTag(i, new_item.getNbt())
+                            
+                            new_item_nbt = items_tag.getTag(i)
+                            new_item_nbt.setTag('Slot', slot)
+                            items_tag.setTag(i, new_item_nbt)
                             
                             box_tag.setTag("Items", items_tag)
                             box_nbt.setTag("tag", box_tag)
@@ -219,7 +218,7 @@ class Container:
                     existing_items_identifier[item_identifier] += count
                 continue
             elif (box_tag := box_nbt.getTag("tag")) and (items_tag := box_tag.getTag("Items")):
-                self.box_cache[box_identifier] = defaultdict(int)
+                self.box_cache[box_identifier] = {}
                 box_cache = self.box_cache[box_identifier]
                 for i in range(items_tag.getSize()):
                     item_nbt = items_tag.getTag(i)
@@ -232,7 +231,7 @@ class Container:
                         
                         existing_items_type[item_type] += count
                         existing_items_identifier[item_identifier] += count
-                        box_cache[item_identifier] = (item_type, count)
+                        box_cache[item_identifier] = (item_type, box_cache.get(item_identifier, ['', 0])[1] + count)
                 
         for item in self.items:
             item = Item(item)

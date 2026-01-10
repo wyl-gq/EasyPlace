@@ -4,7 +4,6 @@ from Structure import StructureBlock, Structure
 
 from Contrainer import Container
 from Item import Item
-from collections import defaultdict
 
 def run_set_cmd(block_name: str, pos: IntPos, states: dict) -> bool:
     state = "[" + str(states)[1:-1].replace(": ","=").replace("\'","\"").replace("\"true\"","true").replace("\"false\"","false") + "]"
@@ -47,7 +46,8 @@ class Block:
 
     def set_block(self, pos: IntPos, pc: Container, *args) -> bool:
         base_item = self.base_item()
-        if pc.check_enougn_item(base_item) and mc.setBlock(pos, self.set_block_name):
+        set_block_name = self.set_block_name
+        if pc.check_enougn_item(base_item) and mc.setBlock(pos, set_block_name):
             pc.remove_item(base_item)
             self.process_state(pos)
             self.process_extra(pos, pc)
@@ -67,7 +67,7 @@ class Block:
                 return
 
             block_state = block.getBlockState()
-            if block_state_str == str(block_state):
+            if block_state_str == block.type + str(block_state):
                 return
 
             nbt = block.getNbt()
@@ -80,7 +80,7 @@ class Block:
                         nbt_value = state_nbt.getTag(key)
                         if nbt_value:
                             hava_process = True
-                            state_nbt.setTag(key, type(nbt_value)(need_replace_states.get(key, value))) # type: ignore
+                            nbt_value.set(need_replace_states.get(key, value)) # type: ignore
 
             if hava_process:
                 nbt.setTag("states", state_nbt)
@@ -129,8 +129,14 @@ class Block:
         return result
 
     def _material_statistics_special(self, result: dict[str, int]) -> None:
-        """子类重写此方法来添加特殊物品统计"""
-        return
+        block_entity_data = self.block.extra_data.get("block_entity_data", {})
+        items_data = block_entity_data.get("Items", [])
+        
+        for item_data in items_data:
+            if item_data:
+                item_name = item_data["Name"]
+                item_count = item_data.get("Count", 1)
+                result[item_name] = result.get(item_name, 0) + item_count
 
     @classmethod
     def process_block_entity_nbt_data(cls, data: dict, nbt: NbtCompound) -> NbtCompound:
@@ -140,10 +146,10 @@ class Block:
 
             nbt_data = nbt.getTag(key)
             if isinstance(nbt_data, NbtCompound) and isinstance(value, dict):
-                nbt.setTag(key, cls.process_block_entity_nbt_data(value, nbt_data)) # type: ignore
+                cls.process_block_entity_nbt_data(value, nbt_data) # type: ignore
             elif nbt_data is not None:
-                nbt.setTag(key, type(nbt_data)(value))
-            elif isinstance(key, str):
+                nbt_data.set(value) # type: ignore
+            elif isinstance(value, str):
                 nbt.setString(key, value)
 
         return nbt
@@ -157,7 +163,7 @@ class Block:
         '''0 为还未放置 1完全不匹配 2为状态不匹配 3 为容器物品/方块实体状态不匹配 4 为匹配成功 '''
 
         mc_block_type_air = mc_block.type == 'minecraft:air'
-        block_type_air = block.base_name == 'minecraft:air'
+        block_type_air = block.identifier == 'minecraft:air'
 
         if mc_block_type_air:
             return 4 if block_type_air else 0
@@ -217,15 +223,6 @@ class Container_Block(Block):
                 container.setItem(container_item["Slot"], matched_item)
                 pc.remove_item(item, False)
     
-    def _material_statistics_special(self, result: dict[str, int]) -> None:
-        block_entity_data = self.block.extra_data.get("block_entity_data", {})
-        items_data = block_entity_data.get("Items", [])
-        
-        for item_data in items_data:
-            item_name = item_data["Name"]
-            item_count = item_data.get("Count", 1)
-            result[item_name] = result.get(item_name, 0) + item_count
-
 class Furnace(Block):
     def process_extra(self, pos: IntPos, pc: Container, *args) -> None:        
         container = mc.getBlock(pos).getContainer()
@@ -242,12 +239,13 @@ class Furnace(Block):
         items_data = block_entity_data.get("Items", [])
         
         for item_data in items_data:
-            # 对于熔炉类，跳过输出槽（槽位2）
-            if item_data.get("Slot") == 2:
-                continue
-            item_name = item_data["Name"]
-            item_count = item_data.get("Count", 1)
-            result[item_name] = result.get(item_name, 0) + item_count
+            if item_data:
+                # 对于熔炉类，跳过输出槽（槽位2）
+                if item_data.get("Slot") == 2:
+                    continue
+                item_name = item_data["Name"]
+                item_count = item_data.get("Count", 1)
+                result[item_name] = result.get(item_name, 0) + item_count
 
 class Crafter(Block):
     def process_extra(self, pos: IntPos, pc: Container, *args) -> None:
@@ -256,16 +254,16 @@ class Crafter(Block):
         
         container = block.getContainer()
         for container_item in structure_block_entity_data["Items"]:
-            item = Item(container_item)
-            matched_item = pc.get_match_item(item)
-            if matched_item:
-                container.setItem(container_item["Slot"], matched_item)
-                pc.remove_item(item, False)
+            if container_item:
+                item = Item(container_item)
+                matched_item = pc.get_match_item(item)
+                if matched_item:
+                    container.setItem(container_item["Slot"], matched_item)
+                    pc.remove_item(item, False)
 
         block_entity = block.getBlockEntity()
         block_entity_nbt: NbtCompound = block_entity.getNbt()
-        value = type(block_entity_nbt.getTag("disabled_slots"))(structure_block_entity_data["disabled_slots"]) # type: ignore
-        block_entity_nbt.setTag("disabled_slots", value)
+        block_entity_nbt.getTag("disabled_slots").set(structure_block_entity_data["disabled_slots"]) # type: ignore
         block_entity.setNbt(block_entity_nbt)
 
 class BrewingStand(Block):
@@ -283,11 +281,11 @@ class BrewingStand(Block):
                 if match_item:
                     slot = item_data["Slot"]
                     if slot == 1:
-                        state_nbt.setTag("brewing_stand_slot_a_bit", type(state_nbt.getTag("brewing_stand_slot_a_bit"))(1))
+                        state_nbt.getTag("brewing_stand_slot_a_bit").set(1)
                     elif slot == 2:
-                        state_nbt.setTag("brewing_stand_slot_b_bit", type(state_nbt.getTag("brewing_stand_slot_b_bit"))(1))
+                        state_nbt.getTag("brewing_stand_slot_b_bit").set(1)
                     elif slot == 3:
-                        state_nbt.setTag("brewing_stand_slot_c_bit", type(state_nbt.getTag("brewing_stand_slot_c_bit"))(1))
+                        state_nbt.getTag("brewing_stand_slot_c_bit").set(1)
                         
                     block_container.setItem(slot, match_item)
                     pc.remove_item(item, False)
@@ -300,11 +298,12 @@ class BrewingStand(Block):
         items_data = block_entity_data.get("Items", [])
         
         for item_data in items_data:
-            slot = item_data.get("Slot", -1)
-            if slot in [1, 2, 3]:  # 炼药锅的三个槽位
-                item_name = item_data["Name"]
-                item_count = item_data.get("Count", 1)
-                result[item_name] = result.get(item_name, 0) + item_count
+            if item_data:
+                slot = item_data.get("Slot", -1)
+                if slot in [1, 2, 3]:  # 炼药锅的三个槽位
+                    item_name = item_data["Name"]
+                    item_count = item_data.get("Count", 1)
+                    result[item_name] = result.get(item_name, 0) + item_count
 
 class Noteblock(Block):
     def process_extra(self, pos: IntPos, pc: Container, *args) -> None:
@@ -410,7 +409,7 @@ class FlowerPot(Block):
                 block_nbt = block.getNbt()
                 state_nbt = block_nbt.getTag("states")
                 if state_nbt:
-                    state_nbt.setTag("update_bit", type(state_nbt.getTag("update_bit"))(1))
+                    state_nbt.getTag("update_bit").set(1)
                     block_nbt.setTag("states", state_nbt)
                     mc.setBlock(pos, block_nbt)
     
@@ -540,13 +539,13 @@ class Bed(Block):
                 head_bed: LLSE_Block = mc.getBlock(pos)
                 bed_entity = head_bed.getBlockEntity()
                 bed_nbt: NbtCompound = bed_entity.getNbt()
-                bed_nbt.setTag("color", type(bed_nbt.getTag("color"))(color)) # type: ignore
+                bed_nbt.getTag("color").set(color) # type: ignore
                 bed_entity.setNbt(bed_nbt)
                 
                 feet_bed: LLSE_Block = mc.getBlock(pos.x + dx, pos.y, pos.z + dz, pos.dimid)
                 bed_entity = feet_bed.getBlockEntity()
                 bed_nbt: NbtCompound = bed_entity.getNbt()
-                bed_nbt.setTag("color", type(bed_nbt.getTag("color"))(color)) # type: ignore
+                bed_nbt.getTag("color").set(color) # type: ignore
                 bed_entity.setNbt(bed_nbt)
                 
                 return True
@@ -589,18 +588,6 @@ class Lava(Block):
                 pc.shift_item_to(self.lava_bucket, Block.bucket)
                 return True
         return False
-    
-    def material_statistics(self) -> dict[str, int]:
-        result = {}
-        structure_block = self.block
-        
-        if structure_block.identifier == "minecraft:lava":
-            if structure_block.states["liquid_depth"] == 0:
-                item = self.base_item()
-                if item:
-                    result[item.type] = 1
-        
-        return result
 
 class Double_slab(Block):
     def base_item(self) -> Item:
@@ -639,7 +626,7 @@ class Banner(Block):
         block: LLSE_Block = mc.getBlock(pos)
         block_entity = block.getBlockEntity()
         entity_nbt: NbtCompound = block_entity.getNbt()
-        entity_nbt.setTag('Base', type(entity_nbt.getTag('Base'))(self.block.extra_data['block_entity_data']['Base'])) # type: ignore
+        entity_nbt.getTag('Base').set(self.block.extra_data['block_entity_data']['Base']) # type: ignore
         block_entity.setNbt(entity_nbt)
 
 class Snow_layer(Block):
@@ -647,15 +634,6 @@ class Snow_layer(Block):
         block_identifier = self.block.identifier
         item_name = block_name_to_item_name.get(block_identifier, block_identifier)
         return Item(item_name, self.block.states["height"] + 1) # type: ignore
-    
-    def material_statistics(self) -> dict[str, int]:
-        result = {}
-        structure_block = self.block
-        
-        if structure_block.identifier == "minecraft:powder_snow":
-            result["minecraft:powder_snow_bucket"] = 1
-        
-        return result
 
 class Pink_petals(Block):
     def base_item(self) -> Item:
@@ -701,11 +679,11 @@ def setblock(
             
         return False
     except Exception as e:
-        print(traceback.format_exc(), structure_block.identifier)
+        print(traceback.format_exc(), structure_block.identifier, structure_block.states, structure_block.state_str, structure_block.extra_data)
         return False
 
-def get_structure_materials(structure: Structure, layer: int = 0) -> defaultdict[str, int]:
-    result = defaultdict(int)
+def get_structure_materials(structure: Structure, layer: int = 0) -> dict[str, int]:
+    result = {}
     size_x, size_y, size_z = structure.size
     if layer == 0:
         y_start = 0
@@ -725,7 +703,7 @@ def get_structure_materials(structure: Structure, layer: int = 0) -> defaultdict
                 block = structure.get_block_no_check((x, y, z))
                 if block.identifier != 'minecraft:air' and block.identifier not in black_block_name:
                     for item_name, count in Block.create(block).material_statistics().items():
-                        result[item_name] += count
+                        result[item_name] = result.get(item_name, 0) + count
     
     return result
 

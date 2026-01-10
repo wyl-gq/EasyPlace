@@ -1,9 +1,6 @@
-from __future__ import annotations
 from collections import defaultdict
-from functools import partial
 from math import radians, sin, cos, floor, ceil, sqrt
-from struct import unpack
-from typing import Any, BinaryIO, Optional, Tuple, Union, Dict
+from typing import Any, Dict, Optional, Union
 from typing import Self
 import traceback
 
@@ -173,8 +170,95 @@ black_item_name = {'minecraft:undyed_shulker_box', 'minecraft:orange_shulker_box
 all_not_process_states: set[str] = {'growing_plant_age', 'explode_bit', 'age', 'wall_connection_type_east', 'wall_connection_type_north', 'wall_connection_type_south', 'wall_connection_type_west', 'wall_post_bit', 'trial_spawner_state', 'redstone_signal', 'powered_bit', 'powered_shelf_type', 'button_pressed_bit', 'in_wall_bit', 'update_bit', 'age_bit', 'rail_data_bit', 'growth', 'triggered_bit', 'crafting', 'occupied_bit', 'cracked_state', 'creaking_heart_state', 'natural', 'weeping_vines_age', 'infiniburn_bit', 'big_dripleaf_tilt', 'rehydration_level', 'active', 'can_summon', 'sculk_sensor_phase', 'output_lit_bit', 'kelp_age', 'cracked_state', 'toggle_bit', 'propagule_stage', 'twisting_vines_age', 'moisturized_amount', 'stability', 'stability_check', 'toggle_bit', 'suspended_bit', 'disarmed_bit'}
 need_replace_states = {'persistent_bit': True, 'natural': False}
 blocks_not_process_states = {'minecraft:trip_wire': {'attached_bit'}, 'minecraft:tripwire_hook': {'attached_bit'}, 'minecraft:barrel': {'open_bit'}}
-Coordinate = Tuple[int, int, int]
+Coordinate = tuple[int, int, int]
 COMPABILITY_VERSION: int = 17959425
+
+class BinaryIO:
+
+    def __init__(self, data):
+        self.data = data
+        self.current = 0
+
+    def read(self, size=-1):
+        if size == -1:
+            return self.data[self.current:]
+        else:
+            next = self.current + size
+            res = self.data[self.current:next]
+            self.current = next
+            return res
+
+class Read:
+
+    def __init__(self, io):
+        self.io = io
+
+    def read(self, fmt, size):
+        data = self.io.read(size)
+        result = []
+        idx = 0
+        i = 0
+        while i < len(fmt):
+            count = 1
+            if fmt[i].isdigit():
+                count_str = ''
+                while i < len(fmt) and fmt[i].isdigit():
+                    count_str += fmt[i]
+                    i += 1
+                count = int(count_str)
+            format_char = fmt[i]
+            if format_char == 'b':
+                for _ in range(count):
+                    result.append(int.from_bytes(data[idx:idx + 1], byteorder='little', signed=True))
+                    idx += 1
+            elif format_char == 'B':
+                for _ in range(count):
+                    result.append(data[idx])
+                    idx += 1
+            elif format_char == 'h':
+                for _ in range(count):
+                    result.append(int.from_bytes(data[idx:idx + 2], byteorder='little', signed=True))
+                    idx += 2
+            elif format_char == 'i':
+                for _ in range(count):
+                    result.append(int.from_bytes(data[idx:idx + 4], byteorder='little', signed=True))
+                    idx += 4
+            elif format_char == 'q':
+                for _ in range(count):
+                    result.append(int.from_bytes(data[idx:idx + 8], byteorder='little', signed=True))
+                    idx += 4
+            elif format_char == 'f':
+                for _ in range(count):
+                    b1, b2, b3, b4 = (data[idx], data[idx + 1], data[idx + 2], data[idx + 3])
+                    idx += 4
+                    int_val = b1 | b2 << 8 | b3 << 16 | b4 << 24
+                    sign = -1.0 if int_val >> 31 else 1.0
+                    exponent = int_val >> 23 & 255
+                    mantissa = int_val & 8388607
+                    if exponent == 0:
+                        if mantissa == 0:
+                            result.append(0.0 * sign)
+                        else:
+                            result.append(sign * mantissa * 1.1920928955078125e-07 * 1.1754943508222875e-38)
+                    elif exponent == 255:
+                        if mantissa == 0:
+                            result.append(float('inf') * sign)
+                        else:
+                            result.append(float('nan'))
+                    else:
+                        result.append(sign * (1.0 + mantissa * 1.1920928955078125e-07) * 2.0 ** (exponent - 127))
+            elif format_char == 's':
+                if count == 1:
+                    result.append(data[idx:idx + 1])
+                    idx += 1
+                else:
+                    result.append(data[idx:idx + count])
+                    idx += count
+            i += 1
+        return tuple(result)
+
+    def __call__(self, fmt, size):
+        return self.read(fmt, size)
 
 class BaseTag(object):
 
@@ -182,9 +266,14 @@ class BaseTag(object):
         self.name = name
         self.value = value
 
+    @staticmethod
+    def _read_utf8(read):
+        name_length = read('h', 2)[0]
+        return read.io.read(name_length).decode('utf-8')
+
     @classmethod
     def read(cls, read, has_name=True):
-        name = read.src.read(read('h', 2)[0]).decode('utf-8') if has_name else None
+        name = cls._read_utf8(read) if has_name else None
         if cls is TAG_Compound:
             final = {}
             while True:
@@ -193,43 +282,43 @@ class BaseTag(object):
                     break
                 tmp = _tags[tag].read(read)
                 final[tmp.name] = tmp
-            return cls(final, name)
+            return cls(final, name=name)
         elif cls is TAG_List:
             tag_type, length = read('bi', 5)
             tag_read = _tags[tag_type].read
-            return cls(_tags[tag_type], [tag_read(read, has_name=False) for x in range(0, length)], name)
+            return cls(_tags[tag_type], [tag_read(read, has_name=False) for x in range(0, length)], name=name)
         elif cls is TAG_String:
-            value = read.src.read(read('h', 2)[0]).decode('utf-8')
-            return cls(value, name)
+            value = cls._read_utf8(read)
+            return cls(value, name=name)
         elif cls is TAG_Byte_Array:
             length = read('i', 4)[0]
-            return cls(bytearray(read.src.read(length)), name)
+            return cls(bytearray(read.io.read(length)), name=name)
         elif cls is TAG_Int_Array:
             length = read('i', 4)[0]
-            return cls(read(f'{length}i', length * 4), name)
+            return cls(read('{0}i'.format(length), length * 4), name=name)
         elif cls is TAG_Long_Array:
             length = read('i', 4)[0]
-            return cls(read(f'{length}q', length * 8), name)
+            return cls(read('{0}q'.format(length), length * 8), name=name)
         elif cls is TAG_Byte:
-            return cls(read('b', 1)[0], name)
+            return cls(read('b', 1)[0], name=name)
         elif cls is TAG_Short:
-            return cls(read('h', 2)[0], name)
+            return cls(read('h', 2)[0], name=name)
         elif cls is TAG_Int:
-            return cls(read('i', 4)[0], name)
+            return cls(read('i', 4)[0], name=name)
         elif cls is TAG_Long:
-            return cls(read('q', 8)[0], name)
+            return cls(read('q', 8)[0], name=name)
         elif cls is TAG_Float:
-            return cls(read('f', 4)[0], name)
+            return cls(read('f', 4)[0], name=name)
         elif cls is TAG_Double:
-            return cls(read('d', 8)[0], name)
+            return cls(read('d', 8)[0], name=name)
         elif cls is TAG_End:
-            return cls(read('2b', 2)[0], name)
+            return cls(read('2b', 2)[0], name=name)
 
     def pretty(self, indent=0, indent_str='  '):
-        return f'{indent_str * indent}{self.__class__.__name__}({self.name!r}): {self.value!r}'
+        return '{0}{1}({2!r}): {3!r}'.format(indent_str * indent, self.__class__.__name__, self.name, self.value)
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.value!r}, {self.name!r})'
+        return '{0}({1!r}, {2!r})'.format(self.__class__.__name__, self.value, self.name)
 
     def __str__(self):
         return repr(self)
@@ -255,7 +344,7 @@ class TAG_Double(BaseTag):
 class TAG_Byte_Array(BaseTag):
 
     def pretty(self, indent=0, indent_str='  '):
-        return f'{indent_str * indent}TAG_Byte_Array({self.name!r}): [{len(self.value)} bytes]'
+        return '{0}TAG_Byte_Array({1!r}): [{2} bytes]'.format(indent_str * indent, self.name, len(self.value))
 
 class TAG_String(BaseTag):
     __slots__ = ('name', 'value')
@@ -263,61 +352,59 @@ class TAG_String(BaseTag):
 class TAG_End(BaseTag):
     __slots__ = ('name', 'value')
 
-class TAG_List(BaseTag, list):
+class TAG_List(BaseTag):
 
     def __init__(self, tag_type, value=None, name=None):
         self.name = name
+        self.value = self
         self.type_ = tag_type
+        self.data = []
         if value is not None:
-            self.extend(value)
-
-    @property
-    def value(self):
-        return self
+            self.data = value
 
     def pretty(self, indent=0, indent_str='  '):
         t = []
-        t.append(f'{indent_str * indent}TAG_List({self.name!r}): {len(self.value)} entries')
-        t.append(f"{indent_str * indent}{'{'}")
-        for v in self.value:
-            t.append(v.pretty(indent + 1, indent_str))
-        t.append(f"{indent_str * indent}{'}'}")
-        return '\n'.join(t)
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({len(self)!r} entries, {self.name!r})'
-
-class TAG_Compound(BaseTag, dict):
-
-    def __init__(self, value=None, name=None):
-        self.name = name
-        if value is not None:
-            self.update(value)
-
-    @property
-    def value(self):
-        return self
-
-    def pretty(self, indent=0, indent_str='  '):
-        t = []
-        t.append('{0}TAG_Compound({1!r}): {2} entries'.format(indent_str * indent, self.name, len(self.value)))
+        t.append('{0}TAG_List({1!r}): {2} entries'.format(indent_str * indent, self.name, len(self.data)))
         t.append('{0}{{'.format(indent_str * indent))
-        for v in self.values():
+        for v in self.data:
             t.append(v.pretty(indent + 1, indent_str))
         t.append('{0}}}'.format(indent_str * indent))
         return '\n'.join(t)
 
     def __repr__(self):
-        return '{0}({1!r} entries, {2!r})'.format(self.__class__.__name__, len(self), self.name)
+        return '{0}({1!r} entries, {2!r})'.format(self.__class__.__name__, len(self.data), self.name)
+
+class TAG_Compound(BaseTag):
+
+    def __init__(self, value=None, name=None):
+        self.name = name
+        self.value = {}
+        if value is not None:
+            self.update(value)
+
+    def pretty(self, indent=0, indent_str='  '):
+        t = []
+        t.append('{0}TAG_Compound({1!r}): {2} entries'.format(indent_str * indent, self.name, len(self.value)))
+        t.append('{0}{{'.format(indent_str * indent))
+        for v in self.value.values():
+            t.append(v.pretty(indent + 1, indent_str))
+        t.append('{0}}}'.format(indent_str * indent))
+        return '\n'.join(t)
+
+    def __repr__(self):
+        return '{0}({1!r} entries, {2!r})'.format(self.__class__.__name__, len(self.value), self.name)
 
     def __setitem__(self, key, value):
         if value.name is None:
             value.name = key
-        super(TAG_Compound, self).__setitem__(key, value)
+        self.value[key] = value
 
-    def update(self, *args, **kwargs):
-        super(TAG_Compound, self).update(*args, **kwargs)
-        for key, item in self.items():
+    def __getitem__(self, key):
+        return self.value[key]
+
+    def update(self, compound):
+        self.value.update(compound.value if isinstance(compound, TAG_Compound) else compound)
+        for key, item in self.value.items():
             if item.name is None:
                 item.name = key
 
@@ -332,27 +419,40 @@ class TAG_Long_Array(BaseTag):
         return '{0}TAG_Long_Array({1!r}): [{2} longs]'.format(indent_str * indent, self.name, len(self.value))
 _tags = (TAG_End, TAG_Byte, TAG_Short, TAG_Int, TAG_Long, TAG_Float, TAG_Double, TAG_Byte_Array, TAG_String, TAG_List, TAG_Compound, TAG_Int_Array, TAG_Long_Array)
 
-def _read_little(src, fmt, size):
-    return unpack('<' + fmt, src.read(size))
-
 class NBTFile(TAG_Compound):
 
-    def __init__(self, io=None, name='', value=None):
-        if io is None:
-            super().__init__(value if value else {}, name)
-            return
-        read = partial(_read_little, io)
-        read.src = io
+    def __init__(self, data):
+        read = Read(BinaryIO(data))
         if read('b', 1)[0] != 10:
             raise IOError('NBTFile does not begin with 0x0A.')
         tmp = TAG_Compound.read(read)
-        super(NBTFile, self).__init__(tmp, tmp.name)
+        self.name = tmp.name
+        self.value = {}
+        if tmp is not None:
+            self.update(tmp)
 
 def _into_pyobj(tag):
-    if isinstance(tag, (TAG_Compound, dict)):
-        return {key: _into_pyobj(value) if isinstance(value, BaseTag) else value for key, value in tag.items()}
+    if isinstance(tag, TAG_Compound):
+        res = {}
+        for key, value in tag.value.items():
+            if isinstance(value, BaseTag):
+                value = _into_pyobj(value)
+            res[key] = value
+        return res
+    if isinstance(tag, dict):
+        res = {}
+        for key, value in tag.items():
+            if isinstance(value, BaseTag):
+                value = _into_pyobj(value)
+            res[key] = value
+        return res
     elif isinstance(tag, (TAG_List, list)):
-        return [_into_pyobj(value) if isinstance(value, BaseTag) else value for value in tag]
+        res = []
+        for value in tag.data:
+            if isinstance(value, BaseTag):
+                value = _into_pyobj(value)
+            res.append(value)
+        return res
     elif isinstance(tag, BaseTag):
         return tag.value
     return tag
@@ -370,10 +470,10 @@ class StructureBlock:
         self.extra_data = extra_data
         self.compability_version = compability_version
         self.identifier = f'{namespace}:{base_name}'
-        self.state_str = str(states)
+        self.state_str = self.identifier + str(states)
 
     @classmethod
-    def from_identifier(cls, identifier, compability_version=COMPABILITY_VERSION, **states: Union[int, str, bool]):
+    def from_identifier(cls, identifier, states, compability_version=COMPABILITY_VERSION):
         if ':' in identifier:
             namespace, base_name = identifier.split(':', 1)
         else:
@@ -381,32 +481,6 @@ class StructureBlock:
             base_name = identifier
         block = cls(namespace, base_name, states, compability_version=compability_version)
         return block
-
-    def __dict__(self):
-        return self.dictionarify()
-
-    def dictionarify(self, *, with_states: bool=True):
-        result = {'name': self.identifier, 'states': self.states if with_states else {}, 'version': self.compability_version}
-        return result
-
-    def dictionarify_with_block_entity(self, *, with_states: bool=True):
-        result = {'name': self.identifier, 'states': self.states if with_states else {}, 'version': self.compability_version}
-        return (result, self.extra_data)
-
-    def get_namespace_and_name(self):
-        return (self.namespace, self.base_name)
-
-    def get_name(self):
-        return self.base_name
-
-    def get_namespace(self):
-        return self.namespace
-
-    def __eq__(self, obj):
-        if isinstance(obj, StructureBlock):
-            if self.dictionarify() == obj.dictionarify():
-                return True
-        return False
 
 class Structure:
 
@@ -421,14 +495,13 @@ class Structure:
 
     @classmethod
     def load(cls, file):
-        nbt = NBTFile(file)
-        size: tuple[int, int, int] = tuple((x.value for x in nbt['size']))
+        with open(file, 'rb') as f:
+            nbt: dict = _into_pyobj(NBTFile(f.read()))
+        size: tuple[int, int, int] = tuple(nbt['size'])
         struct = cls(size)
-        struct.structure_indecis = [_into_pyobj(x) for x in nbt['structure']['block_indices'][0]]
-        struct._palette = [StructureBlock.from_identifier(block['name'].value, _into_pyobj(block['version']), **_into_pyobj(block['states'].value)) for block in nbt['structure']['palette']['default']['block_palette']]
-        _special_blocks = struct._special_blocks
-        for block_index, block_extra_data in nbt['structure']['palette']['default']['block_position_data'].items():
-            _special_blocks[int(block_index)] = _into_pyobj(block_extra_data)
+        struct.structure_indecis = nbt['structure']['block_indices'][0]
+        struct._palette = [StructureBlock.from_identifier(block['name'], block['states'], block['version']) for block in nbt['structure']['palette']['default']['block_palette']]
+        struct._special_blocks = {int(idx): value for idx, value in nbt['structure']['palette']['default']['block_position_data'].items()}
         return struct
 
     def get_block(self, coordinate):
@@ -455,29 +528,24 @@ class Item:
         self.item_dict: dict = {}
         if isinstance(item, Item):
             self.item_dict = item.item_dict.copy()
-            if count is not None:
-                self.count = count
-            return
-        if isinstance(item, (dict, NbtCompound)):
+        elif isinstance(item, (dict, NbtCompound)):
             self.item_dict = item.copy() if isinstance(item, dict) else item.toObject()
             self.item_dict.pop('Slot', None)
-            if count is not None:
-                self.item_dict['Count'] = count
         elif isinstance(item, LLSE_Item):
-            count = count if count is not None else 1
             self.item_dict = item.getNbt().toObject()
             self.item_dict.pop('Slot', None)
         elif isinstance(item, str):
-            count = count if count is not None else 1
             if item in self.item_cache:
                 self.item_dict = self.item_cache[item].copy()
             else:
-                llse_item: LLSE_Item | None = mc.newItem(item, count)
+                llse_item: LLSE_Item | None = mc.newItem(item, 1)
                 if llse_item:
                     self.item_dict = llse_item.getNbt().toObject()
                     self.item_cache[item] = self.item_dict.copy()
                 else:
                     self.item_dict = {'Count': 0, 'Name': '', 'Damage': 0, 'WasPickedUp': 0}
+        if count is not None:
+            self.count = count
         if any((key not in self.item_dict for key in ('Count', 'Name', 'Damage', 'WasPickedUp'))):
             raise ValueError(f'filed builed item for item_dict: {self.item_dict}')
 
@@ -506,10 +574,7 @@ class Item:
             name_nbt = llse_item.getTag('Name')
             if not name_nbt or name_nbt.get() != self.type:
                 return False
-            damage_nbt = llse_item.getTag('Damage')
-            if not damage_nbt or damage_nbt.get() != self.damage:
-                return False
-        elif self.type != llse_item.type or self.damage != llse_item.damage:
+        elif self.type != llse_item.type:
             return False
         return self.get_identifier() == self.get_llse_item_identifier(llse_item)
 
@@ -543,6 +608,7 @@ class Item:
         if not include_count:
             item_dict.pop('Count', None)
         item_dict.pop('Block', None)
+        item_dict.pop('Slot', None)
         return str(item_dict)
 
     @staticmethod
@@ -557,7 +623,7 @@ class Container:
     current_player_mode: int | None = 0
     current_player: LLSE_Player | None = None
     send_info: bool = True
-    box_cache: dict[str, defaultdict] = {}
+    box_cache: dict[str, dict] = {}
 
     def __init__(self, container):
         self.container = container
@@ -596,12 +662,11 @@ class Container:
                     return True
         for shulker in self.shulkers:
             box_nbt: NbtCompound = shulker.getNbt()
-            box_identifier = box_nbt.toSNBT()
+            box_identifier = Item.get_llse_item_identifier(shulker)
             if box_identifier in self.box_cache:
                 if target_item_identifier not in self.box_cache[box_identifier]:
                     continue
             if isinstance((box_tag := box_nbt.getTag('tag')), NbtCompound) and isinstance((items_tag := box_tag.getTag('Items')), NbtList):
-                find = False
                 for i in range(items_tag.getSize()):
                     item_nbt = items_tag.getTag(i)
                     if isinstance(item_nbt, NbtCompound):
@@ -611,18 +676,16 @@ class Container:
                             if count >= search_item_count:
                                 search_item.setNull()
                                 count -= search_item_count
+                                items_tag.setTag(i, search_item.getNbt())
                             else:
-                                nbt_count = NbtByte(search_item_count - count)
-                                search_item.setNbt(search_item.getNbt().setTag('Count', nbt_count))
+                                item_nbt.setByte('Count', search_item_count - count)
+                                items_tag.setTag(i, item_nbt)
                                 count -= search_item_count
-                            items_tag.setTag(i, search_item.getNbt())
                             if count <= 0:
-                                find = True
+                                box_tag.setTag('Items', items_tag)
+                                box_nbt.setTag('tag', box_tag)
+                                shulker.setNbt(box_nbt)
                                 break
-                if find:
-                    box_tag.setTag('Items', items_tag)
-                    box_nbt.setTag('tag', box_tag)
-                    shulker.setNbt(box_nbt)
                 if count <= 0:
                     self.existing_items_identifier[target_item_identifier] -= target_item.count
                     return True
@@ -660,7 +723,7 @@ class Container:
         target_item_identifier = target_item.get_identifier()
         for shulker in self.shulkers:
             box_nbt: NbtCompound = shulker.getNbt()
-            box_identifier = box_nbt.toSNBT()
+            box_identifier = Item.get_llse_item_identifier(shulker)
             if box_identifier in self.box_cache:
                 if target_item_identifier not in self.box_cache[box_identifier]:
                     continue
@@ -671,7 +734,6 @@ class Container:
                         if target_item.match(item_nbt):
                             item_nbt.setByte('Count', target_item.count)
                             return mc.newItem(item_nbt)
-        return None
 
     def shift_item_to(self, target_item, new_item, check=True):
         if self.current_player_mode == PlayerGameMode.creative:
@@ -689,7 +751,7 @@ class Container:
                 return True
         for shulker in self.shulkers:
             box_nbt: NbtCompound = shulker.getNbt()
-            box_identifier = box_nbt.toSNBT()
+            box_identifier = Item.get_llse_item_identifier(box_nbt)
             if box_identifier in self.box_cache and target_item_identifier not in self.box_cache[box_identifier]:
                 continue
             if isinstance((box_tag := box_nbt.getTag('tag')), NbtCompound) and isinstance((items_tag := box_tag.getTag('Items')), NbtList):
@@ -698,7 +760,11 @@ class Container:
                     if isinstance(item_nbt, NbtCompound):
                         search_item = mc.newItem(item_nbt)
                         if search_item is not None and target_item.match(search_item):
+                            slot = item_nbt.getTag('Slot')
                             items_tag.setTag(i, new_item.getNbt())
+                            new_item_nbt = items_tag.getTag(i)
+                            new_item_nbt.setTag('Slot', slot)
+                            items_tag.setTag(i, new_item_nbt)
                             box_tag.setTag('Items', items_tag)
                             box_nbt.setTag('tag', box_tag)
                             shulker.setNbt(box_nbt)
@@ -733,7 +799,7 @@ class Container:
                     existing_items_identifier[item_identifier] += count
                 continue
             elif (box_tag := box_nbt.getTag('tag')) and (items_tag := box_tag.getTag('Items')):
-                self.box_cache[box_identifier] = defaultdict(int)
+                self.box_cache[box_identifier] = {}
                 box_cache = self.box_cache[box_identifier]
                 for i in range(items_tag.getSize()):
                     item_nbt = items_tag.getTag(i)
@@ -744,7 +810,7 @@ class Container:
                         count = item.count
                         existing_items_type[item_type] += count
                         existing_items_identifier[item_identifier] += count
-                        box_cache[item_identifier] = (item_type, count)
+                        box_cache[item_identifier] = (item_type, box_cache.get(item_identifier, ['', 0])[1] + count)
         for item in self.items:
             item = Item(item)
             item_identifier = item.get_identifier()
@@ -796,7 +862,8 @@ class Block:
 
     def set_block(self, pos, pc, *args):
         base_item = self.base_item()
-        if pc.check_enougn_item(base_item) and mc.setBlock(pos, self.set_block_name):
+        set_block_name = self.set_block_name
+        if pc.check_enougn_item(base_item) and mc.setBlock(pos, set_block_name):
             pc.remove_item(base_item)
             self.process_state(pos)
             self.process_extra(pos, pc)
@@ -813,7 +880,7 @@ class Block:
             if block is None:
                 return
             block_state = block.getBlockState()
-            if block_state_str == str(block_state):
+            if block_state_str == block.type + str(block_state):
                 return
             nbt = block.getNbt()
             state_nbt = nbt.getTag('states')
@@ -825,7 +892,7 @@ class Block:
                         nbt_value = state_nbt.getTag(key)
                         if nbt_value:
                             hava_process = True
-                            state_nbt.setTag(key, type(nbt_value)(need_replace_states.get(key, value)))
+                            nbt_value.set(need_replace_states.get(key, value))
             if hava_process:
                 nbt.setTag('states', state_nbt)
                 mc.setBlock(pos, 'Air')
@@ -867,8 +934,13 @@ class Block:
         return result
 
     def _material_statistics_special(self, result):
-        """子类重写此方法来添加特殊物品统计"""
-        return
+        block_entity_data = self.block.extra_data.get('block_entity_data', {})
+        items_data = block_entity_data.get('Items', [])
+        for item_data in items_data:
+            if item_data:
+                item_name = item_data['Name']
+                item_count = item_data.get('Count', 1)
+                result[item_name] = result.get(item_name, 0) + item_count
 
     @classmethod
     def process_block_entity_nbt_data(cls, data, nbt):
@@ -877,10 +949,10 @@ class Block:
                 continue
             nbt_data = nbt.getTag(key)
             if isinstance(nbt_data, NbtCompound) and isinstance(value, dict):
-                nbt.setTag(key, cls.process_block_entity_nbt_data(value, nbt_data))
+                cls.process_block_entity_nbt_data(value, nbt_data)
             elif nbt_data is not None:
-                nbt.setTag(key, type(nbt_data)(value))
-            elif isinstance(key, str):
+                nbt_data.set(value)
+            elif isinstance(value, str):
                 nbt.setString(key, value)
         return nbt
 
@@ -892,7 +964,7 @@ class Block:
     def match(block, mc_block):
         """0 为还未放置 1完全不匹配 2为状态不匹配 3 为容器物品/方块实体状态不匹配 4 为匹配成功 """
         mc_block_type_air = mc_block.type == 'minecraft:air'
-        block_type_air = block.base_name == 'minecraft:air'
+        block_type_air = block.identifier == 'minecraft:air'
         if mc_block_type_air:
             return 4 if block_type_air else 0
         elif block_type_air or block.identifier != mc_block.type:
@@ -938,14 +1010,6 @@ class Container_Block(Block):
                 container.setItem(container_item['Slot'], matched_item)
                 pc.remove_item(item, False)
 
-    def _material_statistics_special(self, result):
-        block_entity_data = self.block.extra_data.get('block_entity_data', {})
-        items_data = block_entity_data.get('Items', [])
-        for item_data in items_data:
-            item_name = item_data['Name']
-            item_count = item_data.get('Count', 1)
-            result[item_name] = result.get(item_name, 0) + item_count
-
 class Furnace(Block):
 
     def process_extra(self, pos, pc, *args):
@@ -962,11 +1026,12 @@ class Furnace(Block):
         block_entity_data = self.block.extra_data.get('block_entity_data', {})
         items_data = block_entity_data.get('Items', [])
         for item_data in items_data:
-            if item_data.get('Slot') == 2:
-                continue
-            item_name = item_data['Name']
-            item_count = item_data.get('Count', 1)
-            result[item_name] = result.get(item_name, 0) + item_count
+            if item_data:
+                if item_data.get('Slot') == 2:
+                    continue
+                item_name = item_data['Name']
+                item_count = item_data.get('Count', 1)
+                result[item_name] = result.get(item_name, 0) + item_count
 
 class Crafter(Block):
 
@@ -975,15 +1040,15 @@ class Crafter(Block):
         structure_block_entity_data = self.block.extra_data['block_entity_data']
         container = block.getContainer()
         for container_item in structure_block_entity_data['Items']:
-            item = Item(container_item)
-            matched_item = pc.get_match_item(item)
-            if matched_item:
-                container.setItem(container_item['Slot'], matched_item)
-                pc.remove_item(item, False)
+            if container_item:
+                item = Item(container_item)
+                matched_item = pc.get_match_item(item)
+                if matched_item:
+                    container.setItem(container_item['Slot'], matched_item)
+                    pc.remove_item(item, False)
         block_entity = block.getBlockEntity()
         block_entity_nbt: NbtCompound = block_entity.getNbt()
-        value = type(block_entity_nbt.getTag('disabled_slots'))(structure_block_entity_data['disabled_slots'])
-        block_entity_nbt.setTag('disabled_slots', value)
+        block_entity_nbt.getTag('disabled_slots').set(structure_block_entity_data['disabled_slots'])
         block_entity.setNbt(block_entity_nbt)
 
 class BrewingStand(Block):
@@ -1001,11 +1066,11 @@ class BrewingStand(Block):
                 if match_item:
                     slot = item_data['Slot']
                     if slot == 1:
-                        state_nbt.setTag('brewing_stand_slot_a_bit', type(state_nbt.getTag('brewing_stand_slot_a_bit'))(1))
+                        state_nbt.getTag('brewing_stand_slot_a_bit').set(1)
                     elif slot == 2:
-                        state_nbt.setTag('brewing_stand_slot_b_bit', type(state_nbt.getTag('brewing_stand_slot_b_bit'))(1))
+                        state_nbt.getTag('brewing_stand_slot_b_bit').set(1)
                     elif slot == 3:
-                        state_nbt.setTag('brewing_stand_slot_c_bit', type(state_nbt.getTag('brewing_stand_slot_c_bit'))(1))
+                        state_nbt.getTag('brewing_stand_slot_c_bit').set(1)
                     block_container.setItem(slot, match_item)
                     pc.remove_item(item, False)
             block_nbt.setTag('states', state_nbt)
@@ -1015,11 +1080,12 @@ class BrewingStand(Block):
         block_entity_data = self.block.extra_data.get('block_entity_data', {})
         items_data = block_entity_data.get('Items', [])
         for item_data in items_data:
-            slot = item_data.get('Slot', -1)
-            if slot in [1, 2, 3]:
-                item_name = item_data['Name']
-                item_count = item_data.get('Count', 1)
-                result[item_name] = result.get(item_name, 0) + item_count
+            if item_data:
+                slot = item_data.get('Slot', -1)
+                if slot in [1, 2, 3]:
+                    item_name = item_data['Name']
+                    item_count = item_data.get('Count', 1)
+                    result[item_name] = result.get(item_name, 0) + item_count
 
 class Noteblock(Block):
 
@@ -1115,7 +1181,7 @@ class FlowerPot(Block):
                 block_nbt = block.getNbt()
                 state_nbt = block_nbt.getTag('states')
                 if state_nbt:
-                    state_nbt.setTag('update_bit', type(state_nbt.getTag('update_bit'))(1))
+                    state_nbt.getTag('update_bit').set(1)
                     block_nbt.setTag('states', state_nbt)
                     mc.setBlock(pos, block_nbt)
 
@@ -1224,12 +1290,12 @@ class Bed(Block):
                 head_bed: LLSE_Block = mc.getBlock(pos)
                 bed_entity = head_bed.getBlockEntity()
                 bed_nbt: NbtCompound = bed_entity.getNbt()
-                bed_nbt.setTag('color', type(bed_nbt.getTag('color'))(color))
+                bed_nbt.getTag('color').set(color)
                 bed_entity.setNbt(bed_nbt)
                 feet_bed: LLSE_Block = mc.getBlock(pos.x + dx, pos.y, pos.z + dz, pos.dimid)
                 bed_entity = feet_bed.getBlockEntity()
                 bed_nbt: NbtCompound = bed_entity.getNbt()
-                bed_nbt.setTag('color', type(bed_nbt.getTag('color'))(color))
+                bed_nbt.getTag('color').set(color)
                 bed_entity.setNbt(bed_nbt)
                 return True
         return False
@@ -1271,16 +1337,6 @@ class Lava(Block):
                 return True
         return False
 
-    def material_statistics(self):
-        result = {}
-        structure_block = self.block
-        if structure_block.identifier == 'minecraft:lava':
-            if structure_block.states['liquid_depth'] == 0:
-                item = self.base_item()
-                if item:
-                    result[item.type] = 1
-        return result
-
 class Double_slab(Block):
 
     def base_item(self):
@@ -1320,7 +1376,7 @@ class Banner(Block):
         block: LLSE_Block = mc.getBlock(pos)
         block_entity = block.getBlockEntity()
         entity_nbt: NbtCompound = block_entity.getNbt()
-        entity_nbt.setTag('Base', type(entity_nbt.getTag('Base'))(self.block.extra_data['block_entity_data']['Base']))
+        entity_nbt.getTag('Base').set(self.block.extra_data['block_entity_data']['Base'])
         block_entity.setNbt(entity_nbt)
 
 class Snow_layer(Block):
@@ -1329,13 +1385,6 @@ class Snow_layer(Block):
         block_identifier = self.block.identifier
         item_name = block_name_to_item_name.get(block_identifier, block_identifier)
         return Item(item_name, self.block.states['height'] + 1)
-
-    def material_statistics(self):
-        result = {}
-        structure_block = self.block
-        if structure_block.identifier == 'minecraft:powder_snow':
-            result['minecraft:powder_snow_bucket'] = 1
-        return result
 
 class Pink_petals(Block):
 
@@ -1375,11 +1424,11 @@ def setblock(pc, player, pos, structure_block, structure, rel_pos):
                 return res
         return False
     except Exception as e:
-        print(traceback.format_exc(), structure_block.identifier)
+        print(traceback.format_exc(), structure_block.identifier, structure_block.states, structure_block.state_str, structure_block.extra_data)
         return False
 
 def get_structure_materials(structure, layer=0):
-    result = defaultdict(int)
+    result = {}
     size_x, size_y, size_z = structure.size
     if layer == 0:
         y_start = 0
@@ -1397,7 +1446,7 @@ def get_structure_materials(structure, layer=0):
                 block = structure.get_block_no_check((x, y, z))
                 if block.identifier != 'minecraft:air' and block.identifier not in black_block_name:
                     for item_name, count in Block.create(block).material_statistics().items():
-                        result[item_name] += count
+                        result[item_name] = result.get(item_name, 0) + count
     return result
 
 def Blockinit():
@@ -1511,10 +1560,8 @@ class Structure_Setting:
                 file_name = file[:-12]
                 if file_name in cls.structures:
                     continue
-                file_path = structure_dir + '/' + file
                 try:
-                    with open(file_path, 'rb') as f:
-                        structure = Structure.load(f)
+                    structure = Structure.load(structure_dir + '/' + file)
                     size_y = structure.size[1]
                     cls.structures[file_name] = structure
                     cls.structures_materials_layer_format[file_name] = [Ui.format_materials_for_display(get_structure_materials(structure, layer)) for layer in range(0, size_y + 1)]
@@ -1850,7 +1897,7 @@ class Ui:
                     continue
                 match_level = Block.match(block, mc_block)
                 if match_level <= 3:
-                    error_stats[match_level - 1] += 1
+                    error_stats[match_level] += 1
                     total_errors += 1
                     error_type = ('方块未放置', '方块类型不匹配', '方块状态不匹配', '容器物品/方块实体状态不匹配')[match_level]
                     error_info.append(f'({intpos.x},{intpos.y},{intpos.z}) —— {error_type}')
@@ -2026,7 +2073,7 @@ class TickEvent:
 
     @classmethod
     def set_line_range(cls):
-        if cls.tick % 2 != 0:
+        if cls.tick % 2 == 0:
             return
         for player_uuid, player_setting in PlayerSettings.players.items():
             if not player_setting.structures:
@@ -2180,23 +2227,22 @@ def auto_place(player, block, face):
         return not prevent
     except Exception as e:
         print(traceback.format_exc())
-        return False
+        return True
 ui_command = mc.newCommand('easyplace', 'easyplace', PermType.Any)
 ui_command.overload([])
 ui_command.setCallback(Ui.show_main_form)
 ui_command.setup()
 
 def init():
-    import time
-    start = time.time()
-    print('轻松放置 初始化加载结构中')
-    Blockinit()
-    TickEvent.init()
-    Structure_Setting.get_structure_files()
-    with open('D:\\Desktop\\Server\\structure\\\\test1.mcstructure', 'rb') as f:
-        print(f.read())
-        print(NBT.parseBinaryNBT(f.read()).toObject())
-    print(f'轻松放置 初始加载耗时：{time.time() - start:.2f}s')
+    try:
+        print('轻松放置 初始化加载结构中')
+        Blockinit()
+        TickEvent.init()
+        Structure_Setting.get_structure_files()
+    except Exception as e:
+        print(traceback.format_exc())
+        return False
+    print(f'轻松放置 初始加载完成')
 mc.listen(Event.onPlaceBlock, auto_place)
 mc.listen(Event.onTick, TickEvent.tick_event)
 mc.listen(Event.onLeft, PlayerSettings.player_left)

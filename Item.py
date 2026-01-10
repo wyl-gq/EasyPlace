@@ -8,30 +8,25 @@ class Item:
         
         if isinstance(item, Item):
             self.item_dict = item.item_dict.copy()
-            if count is not None:
-                self.count = count
-            return
-        
-        if isinstance(item, (dict, NbtCompound)):
+        elif isinstance(item, (dict, NbtCompound)):
             self.item_dict = item.copy() if isinstance(item, dict) else item.toObject()
             self.item_dict.pop('Slot', None)
-            if count is not None:
-                self.item_dict['Count'] = count
         elif isinstance(item, LLSE_Item):
-            count = count if count is not None else 1
             self.item_dict = item.getNbt().toObject()
             self.item_dict.pop('Slot', None)
         elif isinstance(item, str):
-            count = count if count is not None else 1
             if item in self.item_cache:
                 self.item_dict = self.item_cache[item].copy()
             else:
-                llse_item: LLSE_Item|None = mc.newItem(item, count)
+                llse_item: LLSE_Item|None = mc.newItem(item, 1)
                 if llse_item:
                     self.item_dict = llse_item.getNbt().toObject()
                     self.item_cache[item] = self.item_dict.copy()
                 else:
                     self.item_dict = {'Count': 0, 'Name': '', 'Damage': 0, 'WasPickedUp': 0}
+
+        if count is not None:
+            self.count = count
         
         if any(key not in self.item_dict for key in ('Count', 'Name', 'Damage', 'WasPickedUp')):
             raise ValueError(f'filed builed item for item_dict: {self.item_dict}')
@@ -61,12 +56,8 @@ class Item:
             name_nbt = llse_item.getTag('Name') 
             if not name_nbt or name_nbt.get() != self.type:
                 return False
-            
-            damage_nbt = llse_item.getTag('Damage') 
-            if not damage_nbt or damage_nbt.get() != self.damage:
-                return False
         
-        elif self.type != llse_item.type or self.damage != llse_item.damage:
+        elif self.type != llse_item.type:
             return False
         
         return self.get_identifier() == self.get_llse_item_identifier(llse_item)
@@ -105,6 +96,7 @@ class Item:
         if not include_count:
             item_dict.pop('Count', None)
         item_dict.pop('Block', None)
+        item_dict.pop('Slot', None)
         return str(item_dict)
 
     @staticmethod

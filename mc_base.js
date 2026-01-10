@@ -1,237 +1,174 @@
-try:
-    from llse_api import (  # type: ignore
-        NbtCompound,
-        LLSE_Block,
-        LLSE_Player,
-        LLSE_Container,
-        LLSE_CustomForm,
-        LLSE_Device,
-        LLSE_Entity,
-        LLSE_Item,
-        LLSE_Packet,
-        LLSE_SimpleForm,
-        LLSE_Command,
-        LLSE_CommandOrigin,
-        LLSE_CommandOutput,
-        IntPos,
-        FloatPos,
-        NbtByte,
-        NbtByteArray,
-        NbtDouble,
-        NbtFloat,
-        NbtInt,
-        NbtList,
-        NbtLong,
-        NbtShort,
-        NbtString,
-        BinaryStream,
-        ParticleSpawner,
-        DirectionAngle,
-        mc,
-        data,
-        ParamType,
-        PermType,
-        ParticleColor,
-        Direction,
-        LLSE_BlockEntity,
-        ColorPalette,
-        IniConfigFile,
-        JsonConfigFile,
-        DBSession,
-        DBStmt,
-        EVENT_TYPES,
-        LLMoneyEvent,
-        File,
-        FileOpenMode,
-        LLSE_Format,
-        HttpRequest,
-        HttpRequestType,
-        HttpResponse,
-        HttpServer,
-        i18n,
-        KVDatabase,
-        ll,
-        logger,
-        LogLevel,
-        money,
-        network,
-        NBT,
-        NumType,
-        OriginType,
-        PointSize,
-        system,
-    )
+class Event {
+    static onBlockInteracted = "onBlockInteracted";
+    static onBlockChanged = "onBlockChanged";
+    static onBlockExplode = "onBlockExplode";
+    static onRespawnAnchorExplode = "onRespawnAnchorExplode";
+    static onBlockExploded = "onBlockExploded";
+    static onFireSpread = "onFireSpread";
+    static onCmdBlockExecute = "onCmdBlockExecute";
+    static onContainerChange = "onContainerChange";
+    static onProjectileHitBlock = "onProjectileHitBlock";
+    static onRedStoneUpdate = "onRedStoneUpdate";
+    static onHopperSearchItem = "onHopperSearchItem";
+    static onHopperPushOut = "onHopperPushOut";
+    static onPistonTryPush = "onPistonTryPush";
+    static onPistonPush = "onPistonPush";
+    static onFarmLandDecay = "onFarmLandDecay";
+    static onUseFrameBlock = "onUseFrameBlock";
+    static onLiquidFlow = "onLiquidFlow";
 
-    pass
-except:
-    pass
+    // 经济系统事件
+    static beforeMoneyAdd = "beforeMoneyAdd";
+    static onMoneyAdd = "onMoneyAdd";
+    static beforeMoneyReduce = "beforeMoneyReduce";
+    static onMoneyReduce = "onMoneyReduce";
+    static beforeMoneyTrans = "beforeMoneyTrans";
+    static onMoneyTrans = "onMoneyTrans";
+    static beforeMoneySet = "beforeMoneySet";
+    static onMoneySet = "onMoneySet";
 
-class Event:
-    onBlockInteracted = "onBlockInteracted"
-    onBlockChanged = "onBlockChanged"
-    onBlockExplode = "onBlockExplode"
-    onRespawnAnchorExplode = "onRespawnAnchorExplode"
-    onBlockExploded = "onBlockExploded"
-    onFireSpread = "onFireSpread"
-    onCmdBlockExecute = "onCmdBlockExecute"
-    onContainerChange = "onContainerChange"
-    onProjectileHitBlock = "onProjectileHitBlock"
-    onRedStoneUpdate = "onRedStoneUpdate"
-    onHopperSearchItem = "onHopperSearchItem"
-    onHopperPushOut = "onHopperPushOut"
-    onPistonTryPush = "onPistonTryPush"
-    onPistonPush = "onPistonPush"
-    onFarmLandDecay = "onFarmLandDecay"
-    onUseFrameBlock = "onUseFrameBlock"
-    onLiquidFlow = "onLiquidFlow"
+    // 实体相关事件
+    static onMobDie = "onMobDie";
+    static onMobHurt = "onMobHurt";
+    static onEntityExplode = "onEntityExplode";
+    static onMobTrySpawn = "onMobTrySpawn";
+    static onMobSpawned = "onMobSpawned";
+    static onProjectileHitEntity = "onProjectileHitEntity";
+    static onWitherBossDestroy = "onWitherBossDestroy";
+    static onRide = "onRide";
+    static onStepOnPressurePlate = "onStepOnPressurePlate";
+    static onSpawnProjectile = "onSpawnProjectile";
+    static onProjectileCreated = "onProjectileCreated";
+    static onNpcCmd = "onNpcCmd";
+    static onChangeArmorStand = "onChangeArmorStand";
+    static onEntityTransformation = "onEntityTransformation";
+    static onEndermanTakeBlock = "onEndermanTakeBlock";
 
-    # 经济系统事件
-    beforeMoneyAdd = "beforeMoneyAdd"
-    onMoneyAdd = "onMoneyAdd"
-    beforeMoneyReduce = "beforeMoneyReduce"
-    onMoneyReduce = "onMoneyReduce"
-    beforeMoneyTrans = "beforeMoneyTrans"
-    onMoneyTrans = "onMoneyTrans"
-    beforeMoneySet = "beforeMoneySet"
-    onMoneySet = "onMoneySet"
+    // 其他事件
+    static onScoreChanged = "onScoreChanged";
+    static onTick = "onTick";
+    static onServerStarted = "onServerStarted";
+    static onConsoleCmd = "onConsoleCmd";
 
-    # 实体相关事件
-    onMobDie = "onMobDie"
-    onMobHurt = "onMobHurt"
-    onEntityExplode = "onEntityExplode"
-    onMobTrySpawn = "onMobTrySpawn"
-    onMobSpawned = "onMobSpawned"
-    onProjectileHitEntity = "onProjectileHitEntity"
-    onWitherBossDestroy = "onWitherBossDestroy"
-    onRide = "onRide"
-    onStepOnPressurePlate = "onStepOnPressurePlate"
-    onSpawnProjectile = "onSpawnProjectile"
-    onProjectileCreated = "onProjectileCreated"
-    onNpcCmd = "onNpcCmd"
-    onChangeArmorStand = "onChangeArmorStand"
-    onEntityTransformation = "onEntityTransformation"
-    onEndermanTakeBlock = "onEndermanTakeBlock"
+    // 玩家相关事件
+    static onPreJoin = "onPreJoin";
+    static onJoin = "onJoin";
+    static onLeft = "onLeft";
+    static onRespawn = "onRespawn";
+    static onPlayerDie = "onPlayerDie";
+    static onPlayerCmd = "onPlayerCmd";
+    static onChat = "onChat";
+    static onChangeDim = "onChangeDim";
+    static onJump = "onJump";
+    static onSneak = "onSneak";
+    static onAttackEntity = "onAttackEntity";
+    static onAttackBlock = "onAttackBlock";
+    static onUseItem = "onUseItem";
+    static onUseItemOn = "onUseItemOn";
+    static onUseBucketPlace = "onUseBucketPlace";
+    static onUseBucketTake = "onUseBucketTake";
+    static onTakeItem = "onTakeItem";
+    static onDropItem = "onDropItem";
+    static onEat = "onEat";
+    static onAte = "onAte";
+    static onConsumeTotem = "onConsumeTotem";
+    static onEffectAdded = "onEffectAdded";
+    static onEffectRemoved = "onEffectRemoved";
+    static onEffectUpdated = "onEffectUpdated";
+    static onStartDestroyBlock = "onStartDestroyBlock";
+    static onDestroyBlock = "onDestroyBlock";
+    static onPlaceBlock = "onPlaceBlock";
+    static afterPlaceBlock = "afterPlaceBlock";
+    static onOpenContainer = "onOpenContainer";
+    static onCloseContainer = "onCloseContainer";
+    static onInventoryChange = "onInventoryChange";
+    static onChangeSprinting = "onChangeSprinting";
+    static onSetArmor = "onSetArmor";
+    static onUseRespawnAnchor = "onUseRespawnAnchor";
+    static onOpenContainerScreen = "onOpenContainerScreen";
+    static onExperienceAdd = "onExperienceAdd";
+    static onPlayerPullFishingHook = "onPlayerPullFishingHook";
+    static onBedEnter = "onBedEnter";
+    static onPlayerInteractEntity = "onPlayerInteractEntity";
+}
 
-    # 其他事件
-    onScoreChanged = "onScoreChanged"
-    onTick = "onTick"
-    onServerStarted = "onServerStarted"
-    onConsoleCmd = "onConsoleCmd"
+class Dimension {
+    static overworld = 0;
+    static nether = 1;
+    static the_end = 2;
+}
 
-    # 玩家相关事件
-    onPreJoin = "onPreJoin"
-    onJoin = "onJoin"
-    onLeft = "onLeft"
-    onRespawn = "onRespawn"
-    onPlayerDie = "onPlayerDie"
-    onPlayerCmd = "onPlayerCmd"
-    onChat = "onChat"
-    onChangeDim = "onChangeDim"
-    onJump = "onJump"
-    onSneak = "onSneak"
-    onAttackEntity = "onAttackEntity"
-    onAttackBlock = "onAttackBlock"
-    onUseItem = "onUseItem"
-    onUseItemOn = "onUseItemOn"
-    onUseBucketPlace = "onUseBucketPlace"
-    onUseBucketTake = "onUseBucketTake"
-    onTakeItem = "onTakeItem"
-    onDropItem = "onDropItem"
-    onEat = "onEat"
-    onAte = "onAte"
-    onConsumeTotem = "onConsumeTotem"
-    onEffectAdded = "onEffectAdded"
-    onEffectRemoved = "onEffectRemoved"
-    onEffectUpdated = "onEffectUpdated"
-    onStartDestroyBlock = "onStartDestroyBlock"
-    onDestroyBlock = "onDestroyBlock"
-    onPlaceBlock = "onPlaceBlock"
-    afterPlaceBlock = "afterPlaceBlock"
-    onOpenContainer = "onOpenContainer"
-    onCloseContainer = "onCloseContainer"
-    onInventoryChange = "onInventoryChange"
-    onChangeSprinting = "onChangeSprinting"
-    onSetArmor = "onSetArmor"
-    onUseRespawnAnchor = "onUseRespawnAnchor"
-    onOpenContainerScreen = "onOpenContainerScreen"
-    onExperienceAdd = "onExperienceAdd"
-    onPlayerPullFishingHook = "onPlayerPullFishingHook"
-    onBedEnter = "onBedEnter"
-    onPlayerInteractEntity = "onPlayerInteractEntity"
+class PlayerGameMode {
+    static survival = 0;
+    static creative = 1;
+    static adventure = 2;
+    static spectator = 6;
+}
 
-class Dimension:
-    overworld = 0
-    nether = 1
-    the_end = 2
+class BlockActorType {
+    static Undefined = 0;
+    static Furnace = 1;
+    static Chest = 2;
+    static NetherReactor = 3;
+    static Sign = 4;
+    static MobSpawner = 5;
+    static Skull = 6;
+    static FlowerPot = 7;
+    static BrewingStand = 8;
+    static EnchantingTable = 9;
+    static DaylightDetector = 10;
+    static Music = 11;
+    static Comparator = 12;
+    static Dispenser = 13;
+    static Dropper = 14;
+    static Hopper = 15;
+    static Cauldron = 16;
+    static ItemFrame = 17;
+    static PistonArm = 18;
+    static MovingBlock = 19;
+    static Chalkboard = 20;
+    static Beacon = 21;
+    static EndPortal = 22;
+    static EnderChest = 23;
+    static EndGateway = 24;
+    static ShulkerBox = 25;
+    static CommandBlock = 26;
+    static Bed = 27;
+    static Banner = 28;
+    static StructureBlock = 32;
+    static Jukebox = 33;
+    static ChemistryTable = 34;
+    static Conduit = 35;
+    static JigsawBlock = 36;
+    static Lectern = 37;
+    static BlastFurnace = 38;
+    static Smoker = 39;
+    static Bell = 40;
+    static Campfire = 41;
+    static BarrelBlock = 42;
+    static Beehive = 43;
+    static Lodestone = 44;
+    static SculkSensor = 45;
+    static SporeBlossom = 46;
+    static GlowItemFrame = 47;
+    static SculkCatalyst = 48;
+    static SculkShrieker = 49;
+    static HangingSign = 50;
+    static ChiseledBookshelf = 51;
+    static BrushableBlock = 52;
+    static DecoratedPot = 53;
+    static CalibratedSculkSensor = 54;
+    static Crafter = 55;
+    static TrialSpawner = 56;
+    static Vault = 57;
+    static CreakingHeart = 58;
+    static Shelf = 59;
+    static CopperGolemStatue = 60;
+    static Count = 61;
+}
 
-class PlayerGameMode:
-    survival = 0
-    creative = 1
-    adventure = 2
-    spectator = 6
 
-class BlockActorType:
-    Undefined = 0
-    Furnace = 1
-    Chest = 2
-    NetherReactor = 3
-    Sign = 4
-    MobSpawner = 5
-    Skull = 6
-    FlowerPot = 7
-    BrewingStand = 8
-    EnchantingTable = 9
-    DaylightDetector = 10
-    Music = 11
-    Comparator = 12
-    Dispenser = 13
-    Dropper = 14
-    Hopper = 15
-    Cauldron = 16
-    ItemFrame = 17
-    PistonArm = 18
-    MovingBlock = 19
-    Chalkboard = 20
-    Beacon = 21
-    EndPortal = 22
-    EnderChest = 23
-    EndGateway = 24
-    ShulkerBox = 25
-    CommandBlock = 26
-    Bed = 27
-    Banner = 28
-    StructureBlock = 32
-    Jukebox = 33
-    ChemistryTable = 34
-    Conduit = 35
-    JigsawBlock = 36
-    Lectern = 37
-    BlastFurnace = 38
-    Smoker = 39
-    Bell = 40
-    Campfire = 41
-    BarrelBlock = 42
-    Beehive = 43
-    Lodestone = 44
-    SculkSensor = 45
-    SporeBlossom = 46
-    GlowItemFrame = 47
-    SculkCatalyst = 48
-    SculkShrieker = 49
-    HangingSign = 50
-    ChiseledBookshelf = 51
-    BrushableBlock = 52
-    DecoratedPot = 53
-    CalibratedSculkSensor = 54
-    Crafter = 55
-    TrialSpawner = 56
-    Vault = 57
-    CreakingHeart = 58
-    Shelf = 59
-    CopperGolemStatue = 60
-    Count = 61
-
-en_to_ch = {
+const en_to_ch = {
     "minecraft:acacia_boat": "金合欢木船",
     "minecraft:acacia_button": "金合欢木按钮",
     "minecraft:acacia_chest_boat": "金合欢木运输船",
@@ -1537,7 +1474,7 @@ en_to_ch = {
     "minecraft:warped_fence_gate": "诡异木栅栏门"
 }
 
-shulker_boxs = {
+const shulker_boxs = new Set([
     "minecraft:undyed_shulker_box",
     "minecraft:orange_shulker_box",
     "minecraft:white_shulker_box",
@@ -1555,29 +1492,29 @@ shulker_boxs = {
     "minecraft:green_shulker_box",
     "minecraft:red_shulker_box",
     "minecraft:black_shulker_box",
-}
+])
 
-bundles = [
-    "minecraft:bundle",  # 收纳袋
-    "minecraft:white_bundle",  # 白色收纳袋
-    "minecraft:light_gray_bundle",  # 淡灰色收纳袋
-    "minecraft:gray_bundle",  # 灰色收纳袋
-    "minecraft:black_bundle",  # 黑色收纳袋
-    "minecraft:brown_bundle",  # 棕色收纳袋
-    "minecraft:red_bundle",  # 红色收纳袋
-    "minecraft:orange_bundle",  # 橙色收纳袋
-    "minecraft:yellow_bundle",  # 黄色收纳袋
-    "minecraft:lime_bundle",  # 黄绿色收纳袋
-    "minecraft:green_bundle",  # 绿色收纳袋
-    "minecraft:cyan_bundle",  # 青色收纳袋
-    "minecraft:light_blue_bundle",  # 淡蓝色收纳袋
-    "minecraft:blue_bundle",  # 蓝色收纳袋
-    "minecraft:purple_bundle",  # 紫色收纳袋
-    "minecraft:magenta_bundle",  # 品红色收纳袋
-    "minecraft:pink_bundle",  # 粉红色收纳袋
+const bundles = [
+    "minecraft:bundle",  // 收纳袋
+    "minecraft:white_bundle",  // 白色收纳袋
+    "minecraft:light_gray_bundle",  // 淡灰色收纳袋
+    "minecraft:gray_bundle",  // 灰色收纳袋
+    "minecraft:black_bundle",  // 黑色收纳袋
+    "minecraft:brown_bundle",  // 棕色收纳袋
+    "minecraft:red_bundle",  // 红色收纳袋
+    "minecraft:orange_bundle",  // 橙色收纳袋
+    "minecraft:yellow_bundle",  // 黄色收纳袋
+    "minecraft:lime_bundle",  // 黄绿色收纳袋
+    "minecraft:green_bundle",  // 绿色收纳袋
+    "minecraft:cyan_bundle",  // 青色收纳袋
+    "minecraft:light_blue_bundle",  // 淡蓝色收纳袋
+    "minecraft:blue_bundle",  // 蓝色收纳袋
+    "minecraft:purple_bundle",  // 紫色收纳袋
+    "minecraft:magenta_bundle",  // 品红色收纳袋
+    "minecraft:pink_bundle",  // 粉红色收纳袋
 ]
 
-block_name_to_item_name = {
+const block_name_to_item_name = {
     "minecraft:standing_sign": "minecraft:oak_sign",
     "minecraft:spruce_standing_sign": "minecraft:spruce_sign",
     "minecraft:birch_standing_sign": "minecraft:birch_sign",
@@ -1695,7 +1632,7 @@ block_name_to_item_name = {
     "minecraft:wall_banner": "minecraft:banner",
 }
 
-block_name_to_set_name = {
+const block_name_to_set_name = {
     "minecraft:lit_redstone_lamp": "minecraft:redstone_lamp",
     "minecraft:powered_repeater": "minecraft:unpowered_repeater",
     "minecraft:powered_comparator": "minecraft:unpowered_comparator",
@@ -1706,7 +1643,7 @@ block_name_to_set_name = {
     "minecraft:deepslate_lit_redstone_ore": "minecraft:deepslate_redstone_ore",
 }
 
-black_block_name = {
+const black_block_name = new Set([
     "minecraft:undyed_shulker_box",
     "minecraft:orange_shulker_box",
     "minecraft:white_shulker_box",
@@ -1728,9 +1665,9 @@ black_block_name = {
     "minrcraft:sticky_piston_arm_collision",
     "minecraft:water",
     "minecraft:bubble_column",
-}
+])
 
-black_item_name = {
+const black_item_name = new Set([
     "minecraft:undyed_shulker_box",
     "minecraft:orange_shulker_box",
     "minecraft:white_shulker_box",
@@ -1748,26 +1685,26 @@ black_item_name = {
     "minecraft:green_shulker_box",
     "minecraft:red_shulker_box",
     "minecraft:black_shulker_box",
-    "minecraft:bundle",  # 收纳袋
-    "minecraft:white_bundle",  # 白色收纳袋
-    "minecraft:light_gray_bundle",  # 淡灰色收纳袋
-    "minecraft:gray_bundle",  # 灰色收纳袋
-    "minecraft:black_bundle",  # 黑色收纳袋
-    "minecraft:brown_bundle",  # 棕色收纳袋
-    "minecraft:red_bundle",  # 红色收纳袋
-    "minecraft:orange_bundle",  # 橙色收纳袋
-    "minecraft:yellow_bundle",  # 黄色收纳袋
-    "minecraft:lime_bundle",  # 黄绿色收纳袋
-    "minecraft:green_bundle",  # 绿色收纳袋
-    "minecraft:cyan_bundle",  # 青色收纳袋
-    "minecraft:light_blue_bundle",  # 淡蓝色收纳袋
-    "minecraft:blue_bundle",  # 蓝色收纳袋
-    "minecraft:purple_bundle",  # 紫色收纳袋
-    "minecraft:magenta_bundle",  # 品红色收纳袋
-    "minecraft:pink_bundle",  # 粉红色收纳袋
-}
+    "minecraft:bundle",  // 收纳袋
+    "minecraft:white_bundle",  // 白色收纳袋
+    "minecraft:light_gray_bundle",  // 淡灰色收纳袋
+    "minecraft:gray_bundle",  // 灰色收纳袋
+    "minecraft:black_bundle",  // 黑色收纳袋
+    "minecraft:brown_bundle",  // 棕色收纳袋
+    "minecraft:red_bundle",  // 红色收纳袋
+    "minecraft:orange_bundle",  // 橙色收纳袋
+    "minecraft:yellow_bundle",  // 黄色收纳袋
+    "minecraft:lime_bundle",  // 黄绿色收纳袋
+    "minecraft:green_bundle",  // 绿色收纳袋
+    "minecraft:cyan_bundle",  // 青色收纳袋
+    "minecraft:light_blue_bundle",  // 淡蓝色收纳袋
+    "minecraft:blue_bundle",  // 蓝色收纳袋
+    "minecraft:purple_bundle",  // 紫色收纳袋
+    "minecraft:magenta_bundle",  // 品红色收纳袋
+    "minecraft:pink_bundle",  // 粉红色收纳袋
+])
 
-all_not_process_states: set[str] = {
+const all_not_process_states = new Set([
     "growing_plant_age",
     "explode_bit",
     "age",
@@ -1810,13 +1747,29 @@ all_not_process_states: set[str] = {
     "toggle_bit",
     "suspended_bit",
     "disarmed_bit",
-}
+])
 
-need_replace_states = {"persistent_bit": 1, "natural": 0}
+const need_replace_states = {"persistent_bit": 1, "natural": 0}
 
-blocks_not_process_states = {
-    "minecraft:trip_wire": {"attached_bit"},
-    "minecraft:tripwire_hook": {"attached_bit"},
-    "minecraft:barrel": {"open_bit"},
-}
+const blocks_not_process_states = {
+    "minecraft:trip_wire": new Set(["attached_bit"]),
+    "minecraft:tripwire_hook": new Set(["attached_bit"]),
+    "minecraft:barrel": new Set(["open_bit"]),
+};
 
+module.exports = {
+    Event,
+    Dimension,
+    PlayerGameMode,
+    BlockActorType,
+    en_to_ch,
+    shulker_boxs,
+    black_block_name,
+    black_item_name,
+    block_name_to_item_name,
+    block_name_to_set_name,
+    blocks_not_process_states,
+    all_not_process_states,
+    need_replace_states,
+    bundles
+};

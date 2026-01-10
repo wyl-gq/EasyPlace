@@ -1,11 +1,11 @@
+
 {
-    "entry": "easyplace.py",
+    "entry": "easyplace.js",
     "name": "easyplace",
-    "type": "lse-python",
+    "type": "lse-quickjs",
     "dependencies": [
         {
-            "name": "legacy-script-engine-python"
+            "name": "legacy-script-engine-quickjs"
         }
     ]
 }
-

@@ -113,10 +113,8 @@ class Structure_Setting:
                 if file_name in cls.structures:
                     continue
 
-                file_path = structure_dir + "/" + file
                 try:
-                    with open(file_path, 'rb') as f:
-                        structure = Structure.load(f)
+                    structure = Structure.load(structure_dir + '/' + file)
                     
                     size_y = structure.size[1]
                     
@@ -531,7 +529,7 @@ class Ui:
             
                 match_level = Block.match(block, mc_block)
                 if match_level <= 3:
-                    error_stats[match_level - 1] += 1
+                    error_stats[match_level] += 1
                     total_errors += 1
                     error_type = ("方块未放置", "方块类型不匹配", "方块状态不匹配", "容器物品/方块实体状态不匹配")[match_level]
                     error_info.append(f"({intpos.x},{intpos.y},{intpos.z}) —— {error_type}")
@@ -737,7 +735,7 @@ class TickEvent:
                         ps.spawnParticle(intpos, particle + "6")
     @classmethod
     def set_line_range(cls) -> None:
-        if cls.tick % 2 != 0:
+        if cls.tick % 2 == 0:
             return
         
         for player_uuid, player_setting in PlayerSettings.players.items():
@@ -937,7 +935,7 @@ def auto_place(player: LLSE_Player, block: LLSE_Block, face: int) -> bool:
         return not prevent
     except Exception as e:
         print(traceback.format_exc())
-        return False
+        return True
 
 ui_command = mc.newCommand('easyplace', 'easyplace', PermType.Any)
 ui_command.overload([])
@@ -945,14 +943,16 @@ ui_command.setCallback(Ui.show_main_form)
 ui_command.setup()
 
 def init():
-    import time
-    start = time.time()
-    print('轻松放置 初始化加载结构中')
-    Blockinit()
-    TickEvent.init()
-    Structure_Setting.get_structure_files()
+    try:
+        print('轻松放置 初始化加载结构中')
+        Blockinit()
+        TickEvent.init()
+        Structure_Setting.get_structure_files()
+    except Exception as e:
+        print(traceback.format_exc())
+        return False
     
-    print(f'轻松放置 初始加载耗时：{(time.time() - start):.2f}s')
+    print(f'轻松放置 初始加载完成')
 
 mc.listen(Event.onPlaceBlock, auto_place)
 mc.listen(Event.onTick, TickEvent.tick_event)
