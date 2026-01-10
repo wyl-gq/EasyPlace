@@ -3,6 +3,7 @@ const { setblock, Block, Blockinit, get_structure_materials } = require('Block')
 const { black_block_name } = require('mc_base');
 const { Container } = require('Contrainer');
 const { Item } = require('Item');
+const { PlayerGameMode } = require('./easyplace');
 
 class Structure_Setting {
     static structures = {};
@@ -478,16 +479,17 @@ class Ui {
         }
         
         const player_setting = PlayerSettings.players[uuid];
+
         const temp_data = player_setting.attached_data;
         
         const selected_index = parseInt(data[0]);
         const [structure_name] = temp_data["available_structures"][selected_index];
         
-        const offset_x = data[1] ? parseInt(data[1]) : 0;
-        const offset_y = data[2] ? parseInt(data[2]) : 0;
-        const offset_z = data[3] ? parseInt(data[3]) : 0;
+        const offset_x = data[2] ? parseInt(data[1]) : 0;
+        const offset_y = data[3] ? parseInt(data[2]) : 0;
+        const offset_z = data[4] ? parseInt(data[3]) : 0;
         
-        const prevent_level = parseInt(data[4]);
+        const prevent_level = parseInt(data[5]);
         
         const [px, py, pz, pdimid] = temp_data["player_pos"];
         const new_pos = [px + offset_x, py + offset_y, pz + offset_z, pdimid];
@@ -500,7 +502,7 @@ class Ui {
         );
         
         player_setting.add_structure(structure_setting);
-        
+
         player.sendText(`✓ 成功添加结构: ${structure_name}`);
         player.sendText(`  位置: ${new_pos.slice(0, 3)}`);
         player.sendText(`  拦截程度: ${["不拦截", "部分拦截", "完全拦截"][prevent_level]}`);
@@ -850,7 +852,7 @@ class TickEvent {
                 }
                 
                 const mc_block = mc.getBlock(intpos);
-                if (mc_block === null) {
+                if (!mc_block) {
                     continue;
                 }
                 
@@ -872,7 +874,7 @@ class TickEvent {
                 const pos_str = pos.join(',');
                 
                 const mc_block = mc.getBlock(intpos);
-                if (mc_block === null) {
+                if (!mc_block) {
                     continue;
                 }
                 
@@ -1097,7 +1099,12 @@ function set_block(player, pos) {
             Container.send_info = true;
             
             const world_block = mc.getBlock(pos);
-            if (world_block === null || world_block.type !== 'minecraft:air') {
+            if (!world_block) {
+                Container.current_player_mode = null;
+                Container.current_player = null;
+                return [false, false];
+            }
+            if (world_block.type !== 'minecraft:air') {
                 Container.current_player_mode = null;
                 Container.current_player = null;
                 return [false, false];

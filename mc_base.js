@@ -1744,7 +1744,6 @@ const all_not_process_states = new Set([
     "moisturized_amount",
     "stability",
     "stability_check",
-    "toggle_bit",
     "suspended_bit",
     "disarmed_bit",
 ])

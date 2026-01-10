@@ -409,19 +409,19 @@ class Sign extends Block {
         const back_IgnoreLighting = block_entity_data.BackText?.IgnoreLighting || 0;
         const IsWaxed = block_entity_data.IsWaxed || 0;
         
-        if (front_IgnoreLighting !== 1 || !pc.remove_item(this.glow_ink_sac)) {
+        if (front_IgnoreLighting !== 1 || !pc.remove_item(Sign.glow_ink_sac)) {
             if (block_entity_data.FrontText) {
                 block_entity_data.FrontText.IgnoreLighting = 0;
             }
         }
             
-        if (back_IgnoreLighting !== 1 || !pc.remove_item(this.glow_ink_sac)) {
+        if (back_IgnoreLighting !== 1 || !pc.remove_item(Sign.glow_ink_sac)) {
             if (block_entity_data.BackText) {
                 block_entity_data.BackText.IgnoreLighting = 0;
             }
         }
             
-        if (IsWaxed !== 1 || !pc.remove_item(this.honeycomb)) {
+        if (IsWaxed !== 1 || !pc.remove_item(Sign.honeycomb)) {
             block_entity_data.IsWaxed = 0;
         }
 
@@ -707,8 +707,8 @@ class PowderSnow extends Block {
     }
     
     set_block(pos, pc, ...args) {
-        if (pc.check_enougn_item(this.powder_snow_bucket) && mc.setBlock(pos, this.set_block_name)) {
-            pc.shift_item_to(this.powder_snow_bucket, Block.bucket);
+        if (pc.check_enougn_item(PowderSnow.powder_snow_bucket) && mc.setBlock(pos, this.set_block_name)) {
+            pc.shift_item_to(PowderSnow.powder_snow_bucket, Block.bucket);
             return true;
         }
         return false;
@@ -723,8 +723,8 @@ class Lava extends Block {
         
     set_block(pos, pc, ...args) {
         if (this.block.states.liquid_depth === 0) {
-            if (pc.check_enougn_item(this.lava_bucket) && mc.setBlock(pos, this.set_block_name)) {
-                pc.shift_item_to(this.lava_bucket, Block.bucket);
+            if (pc.check_enougn_item(Lava.lava_bucket) && mc.setBlock(pos, this.set_block_name)) {
+                pc.shift_item_to(Lava.lava_bucket, Block.bucket);
                 return true;
             }
         }

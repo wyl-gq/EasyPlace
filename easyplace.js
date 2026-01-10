@@ -1744,7 +1744,6 @@ const all_not_process_states = new Set([
     "moisturized_amount",
     "stability",
     "stability_check",
-    "toggle_bit",
     "suspended_bit",
     "disarmed_bit",
 ])
@@ -3145,19 +3144,19 @@ class Sign extends Block {
         const back_IgnoreLighting = block_entity_data.BackText?.IgnoreLighting || 0;
         const IsWaxed = block_entity_data.IsWaxed || 0;
         
-        if (front_IgnoreLighting !== 1 || !pc.remove_item(this.glow_ink_sac)) {
+        if (front_IgnoreLighting !== 1 || !pc.remove_item(Sign.glow_ink_sac)) {
             if (block_entity_data.FrontText) {
                 block_entity_data.FrontText.IgnoreLighting = 0;
             }
         }
             
-        if (back_IgnoreLighting !== 1 || !pc.remove_item(this.glow_ink_sac)) {
+        if (back_IgnoreLighting !== 1 || !pc.remove_item(Sign.glow_ink_sac)) {
             if (block_entity_data.BackText) {
                 block_entity_data.BackText.IgnoreLighting = 0;
             }
         }
             
-        if (IsWaxed !== 1 || !pc.remove_item(this.honeycomb)) {
+        if (IsWaxed !== 1 || !pc.remove_item(Sign.honeycomb)) {
             block_entity_data.IsWaxed = 0;
         }
 
@@ -3443,8 +3442,8 @@ class PowderSnow extends Block {
     }
     
     set_block(pos, pc, ...args) {
-        if (pc.check_enougn_item(this.powder_snow_bucket) && mc.setBlock(pos, this.set_block_name)) {
-            pc.shift_item_to(this.powder_snow_bucket, Block.bucket);
+        if (pc.check_enougn_item(PowderSnow.powder_snow_bucket) && mc.setBlock(pos, this.set_block_name)) {
+            pc.shift_item_to(PowderSnow.powder_snow_bucket, Block.bucket);
             return true;
         }
         return false;
@@ -3459,8 +3458,8 @@ class Lava extends Block {
         
     set_block(pos, pc, ...args) {
         if (this.block.states.liquid_depth === 0) {
-            if (pc.check_enougn_item(this.lava_bucket) && mc.setBlock(pos, this.set_block_name)) {
-                pc.shift_item_to(this.lava_bucket, Block.bucket);
+            if (pc.check_enougn_item(Lava.lava_bucket) && mc.setBlock(pos, this.set_block_name)) {
+                pc.shift_item_to(Lava.lava_bucket, Block.bucket);
                 return true;
             }
         }
@@ -4279,16 +4278,17 @@ class Ui {
         }
         
         const player_setting = PlayerSettings.players[uuid];
+
         const temp_data = player_setting.attached_data;
         
         const selected_index = parseInt(data[0]);
         const [structure_name] = temp_data["available_structures"][selected_index];
         
-        const offset_x = data[1] ? parseInt(data[1]) : 0;
-        const offset_y = data[2] ? parseInt(data[2]) : 0;
-        const offset_z = data[3] ? parseInt(data[3]) : 0;
+        const offset_x = data[2] ? parseInt(data[1]) : 0;
+        const offset_y = data[3] ? parseInt(data[2]) : 0;
+        const offset_z = data[4] ? parseInt(data[3]) : 0;
         
-        const prevent_level = parseInt(data[4]);
+        const prevent_level = parseInt(data[5]);
         
         const [px, py, pz, pdimid] = temp_data["player_pos"];
         const new_pos = [px + offset_x, py + offset_y, pz + offset_z, pdimid];
@@ -4301,7 +4301,7 @@ class Ui {
         );
         
         player_setting.add_structure(structure_setting);
-        
+
         player.sendText(`✓ 成功添加结构: ${structure_name}`);
         player.sendText(`  位置: ${new_pos.slice(0, 3)}`);
         player.sendText(`  拦截程度: ${["不拦截", "部分拦截", "完全拦截"][prevent_level]}`);
@@ -4651,7 +4651,7 @@ class TickEvent {
                 }
                 
                 const mc_block = mc.getBlock(intpos);
-                if (mc_block === null) {
+                if (!mc_block) {
                     continue;
                 }
                 
@@ -4673,7 +4673,7 @@ class TickEvent {
                 const pos_str = pos.join(',');
                 
                 const mc_block = mc.getBlock(intpos);
-                if (mc_block === null) {
+                if (!mc_block) {
                     continue;
                 }
                 
@@ -4898,7 +4898,12 @@ function set_block(player, pos) {
             Container.send_info = true;
             
             const world_block = mc.getBlock(pos);
-            if (world_block === null || world_block.type !== 'minecraft:air') {
+            if (!world_block) {
+                Container.current_player_mode = null;
+                Container.current_player = null;
+                return [false, false];
+            }
+            if (world_block.type !== 'minecraft:air') {
                 Container.current_player_mode = null;
                 Container.current_player = null;
                 return [false, false];

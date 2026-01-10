@@ -1744,7 +1744,6 @@ all_not_process_states: set[str] = {
     "moisturized_amount",
     "stability",
     "stability_check",
-    "toggle_bit",
     "suspended_bit",
     "disarmed_bit",
 }
@@ -3794,11 +3793,11 @@ class Ui:
         selected_index = int(data[0])
         structure_name, _ = temp_data["available_structures"][selected_index]
         
-        offset_x = int(data[1]) if data[1] else 0
-        offset_y = int(data[2]) if data[2] else 0
-        offset_z = int(data[3]) if data[3] else 0
+        offset_x = int(data[2]) if data[1] else 0
+        offset_y = int(data[3]) if data[2] else 0
+        offset_z = int(data[4]) if data[3] else 0
         
-        prevent_level = int(data[4])
+        prevent_level = int(data[5])
         
         structure_setting = Structure_Setting(
             name=structure_name,
@@ -4109,6 +4108,7 @@ class TickEvent:
             chunk_size = ceil(length / 30)
             chunk_start = chunk_size * (cls.tick % 30)
             for rel_pos, pos, intpos in structure_setting.all_block_without_air[chunk_start : min(chunk_start + chunk_size, length)]:
+                
                 mc_block: LLSE_Block|None = mc.getBlock(intpos)
                 if mc_block is None:
                     continue
