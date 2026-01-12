@@ -1725,7 +1725,7 @@ black_block_name = {
     "minecraft:red_shulker_box",
     "minecraft:black_shulker_box",
     "minecraft:piston_arm_collision",
-    "minrcraft:sticky_piston_arm_collision",
+    "minecraft:sticky_piston_arm_collision",
     "minecraft:water",
     "minecraft:bubble_column",
 }

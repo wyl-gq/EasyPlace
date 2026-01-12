@@ -1662,7 +1662,7 @@ black_block_name = {
     "minecraft:red_shulker_box",
     "minecraft:black_shulker_box",
     "minecraft:piston_arm_collision",
-    "minrcraft:sticky_piston_arm_collision",
+    "minecraft:sticky_piston_arm_collision",
     "minecraft:water",
     "minecraft:bubble_column",
 }
@@ -3577,9 +3577,9 @@ class Ui:
         fm.addButton("删除结构")
         fm.addButton("帮助")
         
-        player.sendForm(fm, Ui.from_main_callable)
+        player.sendForm(fm, Ui.form_main_callable)
     @staticmethod
-    def from_main_callable(player: LLSE_Player, id: int|None, reason: int) -> None:
+    def form_main_callable(player: LLSE_Player, id: int|None, reason: int) -> None:
         if id is None:
             return
         
@@ -3616,7 +3616,7 @@ class Ui:
             info = f"{i+1}. {struct_setting.name} 位置: {struct_setting.pos[:3]} 大小: {struct_setting.structure.size}"
             fm.addButton(info)
             
-        player.sendForm(fm, Ui.from_modify_select_callable)
+        player.sendForm(fm, Ui.form_modify_select_callable)
     @staticmethod
     def show_add_form(player: LLSE_Player) -> None:
         uuid = player.uuid
@@ -3657,7 +3657,7 @@ class Ui:
             "player_pos": (player_pos.x, player_pos.y, player_pos.z, player_pos.dimid)
         }
         
-        player.sendForm(fm, Ui.from_add_structure_callable)
+        player.sendForm(fm, Ui.form_add_structure_callable)
     @staticmethod
     def show_share_structure_form(player: LLSE_Player) -> None:
         uuid = player.uuid
@@ -3690,7 +3690,7 @@ class Ui:
             "online_players": [p.uuid for p in online_players],
         }
         
-        player.sendForm(fm, Ui.from_share_structure_callable)
+        player.sendForm(fm, Ui.form_share_structure_callable)
     @staticmethod
     def show_remove_form(player: LLSE_Player) -> None:
         uuid = player.uuid
@@ -3711,7 +3711,7 @@ class Ui:
         for i, struct_setting in enumerate(player_setting.structures):
             fm.addSwitch(f"{i+1}. {struct_setting.name} 位置: {struct_setting.pos[:3]}", False)
         
-        player.sendForm(fm, Ui.from_remove_structure_callable)
+        player.sendForm(fm, Ui.form_remove_structure_callable)
     @staticmethod
     def show_help_form(player: LLSE_Player) -> None:
         fm = mc.newCustomForm()
@@ -3737,7 +3737,7 @@ class Ui:
         player.sendForm(fm, Ui.empty_callable)
     
     @staticmethod
-    def from_modify_select_callable(player: LLSE_Player, id: int|None, reason: int) -> None:
+    def form_modify_select_callable(player: LLSE_Player, id: int|None, reason: int) -> None:
         if id is None:
             return
         
@@ -3777,9 +3777,9 @@ class Ui:
             "current_structure": structure_setting,
         }
         
-        player.sendForm(fm, Ui.from_modify_operation_callable)
+        player.sendForm(fm, Ui.form_modify_operation_callable)
     @staticmethod
-    def from_add_structure_callable(player: LLSE_Player, data: list|None, reason: int) -> None:
+    def form_add_structure_callable(player: LLSE_Player, data: list|None, reason: int) -> None:
         if data is None:
             return
         
@@ -3793,9 +3793,9 @@ class Ui:
         selected_index = int(data[0])
         structure_name, _ = temp_data["available_structures"][selected_index]
         
-        offset_x = int(data[2]) if data[1] else 0
-        offset_y = int(data[3]) if data[2] else 0
-        offset_z = int(data[4]) if data[3] else 0
+        offset_x = int(data[2]) if data[2] else 0
+        offset_y = int(data[3]) if data[3] else 0
+        offset_z = int(data[4]) if data[4] else 0
         
         prevent_level = int(data[5])
         
@@ -3812,7 +3812,7 @@ class Ui:
         player.sendText(f"  位置: {structure_setting.pos[:3]}")
         player.sendText(f"  拦截程度: {['不拦截', '部分拦截', '完全拦截'][prevent_level]}")
     @staticmethod
-    def from_share_structure_callable(player: LLSE_Player, data: list|None, reason: int) -> None:
+    def form_share_structure_callable(player: LLSE_Player, data: list|None, reason: int) -> None:
         if data is None:
             return
         
@@ -3841,7 +3841,7 @@ class Ui:
         else:
             player.sendText(f"未找到玩家 或许已离开")
     @staticmethod
-    def from_remove_structure_callable(player: LLSE_Player, data: list|None, reason: int) -> None:
+    def form_remove_structure_callable(player: LLSE_Player, data: list|None, reason: int) -> None:
         if data is None:
             return
         
@@ -3850,21 +3850,19 @@ class Ui:
             PlayerSettings.players[uuid] = PlayerSettings(uuid)
         player_setting = PlayerSettings.players[uuid]
         
-        for i, struct_setting in enumerate(player_setting.structures):
+        remove_structures = []
+        for i in range(len(data) - 1):
             if data[i + 1]:
-                player_setting.remove_structure(struct_setting)
+                remove_structures.append(player_setting.structures[i])
+                
+        for struct_setting in remove_structures:
+            player_setting.remove_structure(struct_setting)
         
-        original_count = len(data) - 1  # 原始结构数量
-        new_count = len(player_setting.structures)  # 删除后的结构数量
-        deleted_count = original_count - new_count
-        
-        if deleted_count > 0:
-            player.sendText(f"成功删除 {deleted_count} 个结构设置")
-        else:
-            player.sendText("未选择要删除的结构")
+        if len(remove_structures) > 0:
+            player.sendText(f"成功删除 {len(remove_structures)} 个结构设置")
             
     @staticmethod
-    def from_modify_operation_callable(player: LLSE_Player, id: int|None, reason: int) -> None:
+    def form_modify_operation_callable(player: LLSE_Player, id: int|None, reason: int) -> None:
         if id is None:
             return
     
@@ -3976,9 +3974,9 @@ class Ui:
         max_layers = structure_obj.size[1] if structure_obj else 1
         fm.addSlider("放置层数(0=全部)", 0, max(max_layers, 1), 1, default_layer)
         
-        player.sendForm(fm, Ui.from_add_modify_structure)
+        player.sendForm(fm, Ui.form_add_modify_structure)
     @staticmethod
-    def from_add_modify_structure(player: LLSE_Player, data: list|None, reason: int) -> None:
+    def form_add_modify_structure(player: LLSE_Player, data: list|None, reason: int) -> None:
         if data is None:
             return
         
@@ -4068,8 +4066,11 @@ class TickEvent:
         for dy in range(-r, r + 1):
             for dx in range(-r, r + 1):
                 for dz in range(-r, r + 1):
-                    if dx * dx + dy * dy + dz * dz <= r_sq:
-                        cls.positions.append((dx, dy, dz))
+                    dis = dx * dx + dy * dy + dz * dz
+                    if dis <= r_sq:
+                        cls.positions.append((dx, dy, dz, sqrt(dis)))
+                        
+        cls.positions.sort(key=lambda p: (p[1], p[3]))
     @classmethod
     def tick_event(cls) -> None:
         cls.tick += 1
@@ -4158,11 +4159,11 @@ class TickEvent:
 
     @classmethod
     def place_along_view(cls, player: LLSE_Player, start_pos: FloatPos, direction: DirectionAngle, player_setting: PlayerSettings) -> None:
-        max_distance = 5.5
+        max_distance = 6
         
         pitch_rad = radians(direction.pitch)
         yaw_rad = radians(direction.yaw)
-        
+
         dir_x = -sin(yaw_rad) * cos(pitch_rad)
         dir_y = -sin(pitch_rad)
         dir_z = cos(yaw_rad) * cos(pitch_rad)
@@ -4172,57 +4173,63 @@ class TickEvent:
         start_z = start_pos.z
         dimid = start_pos.dimid
         
-        end_x = start_x + dir_x * max_distance
-        end_y = start_y + dir_y * max_distance
-        end_z = start_z + dir_z * max_distance
+        block_x = floor(start_x)
+        block_y = floor(start_y)
+        block_z = floor(start_z)
+        end_block_pos_x = floor(start_x + dir_x * max_distance)
+        end_block_pos_y = floor(start_y + dir_y * max_distance)
+        end_block_pos_z = floor(start_z + dir_z * max_distance)
         
-        dir_x = -dir_x
-        dir_y = -dir_y
-        dir_z = -dir_z
+        step_x = 1 if dir_x > 0 else -1
+        step_y = 1 if dir_y > 0 else -1
+        step_z = 1 if dir_z > 0 else -1
         
-        x, y, z = end_x, end_y, end_z
+        if dir_x != 0:
+            t_max_x = abs((block_x + (1 if dir_x > 0 else 0) - start_x) / dir_x)
+            t_delta_x = 1.0 / abs(dir_x)
+        else:
+            t_max_x = float('inf')
+            t_delta_x = float('inf')
+        
+        if dir_y != 0:
+            t_max_y = abs((block_y + (1 if dir_y > 0 else 0) - start_y) / dir_y)
+            t_delta_y = 1.0 / abs(dir_y)
+        else:
+            t_max_y = float('inf')
+            t_delta_y = float('inf')
+        
+        if dir_z != 0:
+            t_max_z = abs((block_z + (1 if dir_z > 0 else 0) - start_z) / dir_z)
+            t_delta_z = 1.0 / abs(dir_z)
+        else:
+            t_max_z = float('inf')
+            t_delta_z = float('inf')
         
         pc = Container(player.getInventory())
         Container.current_player_mode = player.gameMode
         Container.current_player = player
         Container.send_info = False
-        for i in range(1000):
-            if cls.set_block_player_setting(pc, player, player_setting, IntPos(floor(x), floor(y), floor(z), dimid)):
+        
+        for _ in range(max_distance * 4):
+            if cls.set_block_player_setting(pc, player, player_setting, IntPos(block_x, block_y, block_z, dimid)):
                 break
             
-            vec_x = start_x - x
-            vec_y = start_y - y  
-            vec_z = start_z - z
-            if vec_x * dir_x + vec_y * dir_y + vec_z * dir_z < 0:
+            if t_max_x < t_max_y and t_max_x < t_max_z:
+                block_x += step_x
+                t_max_x += t_delta_x
+            elif t_max_y < t_max_z:
+                block_y += step_y
+                t_max_y += t_delta_y
+            else:
+                block_z += step_z
+                t_max_z += t_delta_z
+            
+            if block_x == end_block_pos_x and block_y == end_block_pos_y and block_z == end_block_pos_z:
                 break
-            
-            if dir_x > 0:
-                x_dis = (floor(x + (1 + 1e-6)) - x) / dir_x if dir_x != 0 else float('inf')
-            elif dir_x < 0:
-                x_dis = (ceil(x - (1 + 1e-6)) - x) / dir_x if dir_x != 0 else float('inf')
-            else:
-                x_dis = float('inf')
-                
-            if dir_y > 0:
-                y_dis = (floor(y + (1 + 1e-6)) - y) / dir_y if dir_y != 0 else float('inf')
-            elif dir_y < 0:
-                y_dis = (ceil(y - (1 + 1e-6)) - y) / dir_y if dir_y != 0 else float('inf')
-            else:
-                y_dis = float('inf')
-                
-            if dir_z > 0:
-                z_dis = (floor(z + (1 + 1e-6)) - z) / dir_y if dir_z != 0 else float('inf')
-            elif dir_z < 0:
-                z_dis = (ceil(z - (1 + 1e-6)) - z) / dir_y if dir_z != 0 else float('inf')
-            else:
-                z_dis = float('inf')
-            
-            min_dis = min(abs(x_dis), abs(y_dis), abs(z_dis))
-            x += min_dis * dir_x
-            y += min_dis * dir_y
-            z += min_dis * dir_z
+        
         Container.current_player_mode = None
         Container.current_player = None
+        
     @classmethod
     def place_circle_around_player(cls, player: LLSE_Player, start_pos: FloatPos, direction: DirectionAngle, player_setting: PlayerSettings) -> None:
         cx, cy, cz = floor(start_pos.x), floor(start_pos.y), floor(start_pos.z)
@@ -4235,23 +4242,16 @@ class TickEvent:
         dir_z = cos(yaw_rad) * cos(pitch_rad)
         cos_threshold = cos(radians(45))
         
-        pos_list = []
-        for dx, dy, dz in cls.positions:
-            dis = sqrt(dx * dx + dy * dy + dz * dz)
-            if dx * dir_x + dy * dir_y + dz * dir_z > cos_threshold * dis:
-                pos_list.append((dx, dy, dz, dis))
-        
-        pos_list.sort(key=lambda p: (p[1], p[3]))
-        
         Container.current_player_mode = player.gameMode
         Container.current_player = player
         Container.send_info = False
-        
         pc = Container(player.getInventory())
-        for dx, dy, dz, dis in pos_list:
-            if cls.set_block_player_setting(pc, player, player_setting, IntPos(cx+dx, cy+dy, cz+dz, dimid)):
-                break
-            
+        
+        for dx, dy, dz, dis in cls.positions:
+            if dx * dir_x + dy * dir_y + dz * dir_z > cos_threshold * dis:
+                if cls.set_block_player_setting(pc, player, player_setting, IntPos(cx+dx, cy+dy, cz+dz, dimid)):
+                    break
+        
         Container.current_player_mode = None
         Container.current_player = None
     @staticmethod

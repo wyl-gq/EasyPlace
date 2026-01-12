@@ -3,7 +3,7 @@ const { setblock, Block, Blockinit, get_structure_materials } = require('Block')
 const { black_block_name } = require('mc_base');
 const { Container } = require('Contrainer');
 const { Item } = require('Item');
-const { PlayerGameMode } = require('./easyplace');
+const { PlayerGameMode, FlowerPot } = require('./easyplace');
 
 class Structure_Setting {
     static structures = {};
@@ -240,10 +240,10 @@ class Ui {
         fm.addButton("删除结构");
         fm.addButton("帮助");
         
-        player.sendForm(fm, Ui.from_main_callable);
+        player.sendForm(fm, Ui.form_main_callable);
     }
 
-    static from_main_callable(player, id, reason) {
+    static form_main_callable(player, id, reason) {
         if (id === null) {
             return;
         }
@@ -286,7 +286,7 @@ class Ui {
             fm.addButton(info);
         }
             
-        player.sendForm(fm, Ui.from_modify_select_callable);
+        player.sendForm(fm, Ui.form_modify_select_callable);
     }
 
     static show_add_form(player) {
@@ -332,7 +332,7 @@ class Ui {
             "player_pos": [player_pos.x, player_pos.y, player_pos.z, player_pos.dimid]
         };
         
-        player.sendForm(fm, Ui.from_add_structure_callable);
+        player.sendForm(fm, Ui.form_add_structure_callable);
     }
 
     static show_share_structure_form(player) {
@@ -370,7 +370,7 @@ class Ui {
             "online_players": online_players.map(p => p.uuid),
         };
         
-        player.sendForm(fm, Ui.from_share_structure_callable);
+        player.sendForm(fm, Ui.form_share_structure_callable);
     }
 
     static show_remove_form(player) {
@@ -396,7 +396,7 @@ class Ui {
             fm.addSwitch(`${i+1}. ${struct_setting.name} 位置: ${struct_setting.pos.slice(0, 3)}`, false);
         }
         
-        player.sendForm(fm, Ui.from_remove_structure_callable);
+        player.sendForm(fm, Ui.form_remove_structure_callable);
     }
 
     static show_help_form(player) {
@@ -423,7 +423,7 @@ class Ui {
         player.sendForm(fm, Ui.empty_callable);
     }
 
-    static from_modify_select_callable(player, id, reason) {
+    static form_modify_select_callable(player, id, reason) {
         if (id === null || id === undefined) {
             return;
         }
@@ -465,10 +465,10 @@ class Ui {
             "current_structure": structure_setting,
         };
         
-        player.sendForm(fm, Ui.from_modify_operation_callable);
+        player.sendForm(fm, Ui.form_modify_operation_callable);
     }
 
-    static from_add_structure_callable(player, data, reason) {
+    static form_add_structure_callable(player, data, reason) {
         if (data === null || data == undefined) {
             return;
         }
@@ -485,9 +485,9 @@ class Ui {
         const selected_index = parseInt(data[0]);
         const [structure_name] = temp_data["available_structures"][selected_index];
         
-        const offset_x = data[2] ? parseInt(data[1]) : 0;
-        const offset_y = data[3] ? parseInt(data[2]) : 0;
-        const offset_z = data[4] ? parseInt(data[3]) : 0;
+        const offset_x = parseInt(data[2]) ? parseInt(data[2]) : 0;
+        const offset_y = parseInt(data[3]) ? parseInt(data[3]) : 0;
+        const offset_z = parseInt(data[4]) ? parseInt(data[4]) : 0;
         
         const prevent_level = parseInt(data[5]);
         
@@ -508,7 +508,7 @@ class Ui {
         player.sendText(`  拦截程度: ${["不拦截", "部分拦截", "完全拦截"][prevent_level]}`);
     }
 
-    static from_share_structure_callable(player, data, reason) {
+    static form_share_structure_callable(player, data, reason) {
         if (data === null || data == undefined) {
             return;
         }
@@ -544,7 +544,7 @@ class Ui {
         }
     }
 
-    static from_remove_structure_callable(player, data, reason) {
+    static form_remove_structure_callable(player, data, reason) {
         if (data === null || data == undefined) {
             return;
         }
@@ -555,26 +555,24 @@ class Ui {
         }
         const player_setting = PlayerSettings.players[uuid];
         
-        const original_count = player_setting.structures.length;
-        
+        const remove_structures = [];
+        const original_count = data.length - 1;
         for (let i = 0; i < original_count; i++) {
             if (data[i + 1]) {
-                const struct_setting = player_setting.structures[i];
-                player_setting.remove_structure(struct_setting);
+                remove_structures.push(player_setting.structures[i]);
             }
         }
+
+        for (let i = 0; i < remove_structures.length; i++) {
+            player_setting.remove_structure(remove_structures[i]);
+        }
         
-        const new_count = player_setting.structures.length;
-        const deleted_count = original_count - new_count;
-        
-        if (deleted_count > 0) {
-            player.sendText(`成功删除 ${deleted_count} 个结构设置`);
-        } else {
-            player.sendText("未选择要删除的结构");
+        if (remove_structures.length > 0) {
+            player.sendText(`成功删除 ${remove_structures.length} 个结构设置`);
         }
     }
 
-    static from_modify_operation_callable(player, id, reason) {
+    static form_modify_operation_callable(player, id, reason) {
         if (id === null || data == undefined) {
             return;
         }
@@ -697,10 +695,10 @@ class Ui {
         const max_layers = structure_obj ? structure_obj.size[1] : 1;
         fm.addSlider("放置层数(0=全部)", 0, Math.max(max_layers, 1), 1, default_layer);
         
-        player.sendForm(fm, Ui.from_add_modify_structure);
+        player.sendForm(fm, Ui.form_add_modify_structure);
     }
 
-    static from_add_modify_structure(player, data, reason) {
+    static form_add_modify_structure(player, data, reason) {
         if (data === null || data == undefined) {
             return;
         }
@@ -808,12 +806,15 @@ class TickEvent {
         for (let dy = -r; dy <= r; dy++) {
             for (let dx = -r; dx <= r; dx++) {
                 for (let dz = -r; dz <= r; dz++) {
-                    if (dx * dx + dy * dy + dz * dz <= r_sq) {
-                        this.positions.push([dx, dy, dz]);
+                    const dis = dx * dx + dy * dy + dz * dz;
+                    if (dis <= r_sq) {
+                        this.positions.push([dx, dy, dz, Math.sqrt(dis)]);
                     }
                 }
             }
         }
+
+        this.positions.sort((a, b) => a[1] - b[1] || a[3] - b[3]);
     }
 
     static tick_event() {
@@ -935,7 +936,7 @@ class TickEvent {
     }
 
     static place_along_view(player, start_pos, direction, player_setting) {
-        const max_distance = 5.5;
+        const max_distance = 6;
         
         const pitch_rad = direction.pitch * Math.PI / 180;
         const yaw_rad = direction.yaw * Math.PI / 180;
@@ -949,65 +950,70 @@ class TickEvent {
         const start_z = start_pos.z;
         const dimid = start_pos.dimid;
         
-        const end_x = start_x + dir_x * max_distance;
-        const end_y = start_y + dir_y * max_distance;
-        const end_z = start_z + dir_z * max_distance;
+        let block_x = Math.floor(start_x);
+        let block_y = Math.floor(start_y);
+        let block_z = Math.floor(start_z);
         
-        const reverse_dir_x = -dir_x;
-        const reverse_dir_y = -dir_y;
-        const reverse_dir_z = -dir_z;
+        const end_block_pos_x = Math.floor(start_x + dir_x * max_distance);
+        const end_block_pos_y = Math.floor(start_y + dir_y * max_distance);
+        const end_block_pos_z = Math.floor(start_z + dir_z * max_distance);
         
-        let x = end_x;
-        let y = end_y;
-        let z = end_z;
+        const step_x = dir_x > 0 ? 1 : -1;
+        const step_y = dir_y > 0 ? 1 : -1;
+        const step_z = dir_z > 0 ? 1 : -1;
+        
+        let t_max_x, t_delta_x;
+        let t_max_y, t_delta_y;
+        let t_max_z, t_delta_z;
+        
+        if (dir_x !== 0) {
+            t_max_x = Math.abs((block_x + (dir_x > 0 ? 1 : 0) - start_x) / dir_x);
+            t_delta_x = 1.0 / Math.abs(dir_x);
+        } else {
+            t_max_x = Infinity;
+            t_delta_x = Infinity;
+        }
+        
+        if (dir_y !== 0) {
+            t_max_y = Math.abs((block_y + (dir_y > 0 ? 1 : 0) - start_y) / dir_y);
+            t_delta_y = 1.0 / Math.abs(dir_y);
+        } else {
+            t_max_y = Infinity;
+            t_delta_y = Infinity;
+        }
+        
+        if (dir_z !== 0) {
+            t_max_z = Math.abs((block_z + (dir_z > 0 ? 1 : 0) - start_z) / dir_z);
+            t_delta_z = 1.0 / Math.abs(dir_z);
+        } else {
+            t_max_z = Infinity;
+            t_delta_z = Infinity;
+        }
         
         const pc = new Container(player.getInventory());
         Container.current_player_mode = player.gameMode;
         Container.current_player = player;
         Container.send_info = false;
         
-        for (let i = 0; i < 1000; i++) {
-            if (this.set_block_player_setting(pc, player, player_setting, new IntPos(Math.floor(x), Math.floor(y), Math.floor(z), dimid))) {
+        for (let i = 0; i < max_distance * 4; i++) {
+            if (this.set_block_player_setting(pc, player, player_setting, new IntPos(block_x, block_y, block_z, dimid))) {
                 break;
             }
             
-            const vec_x = start_x - x;
-            const vec_y = start_y - y;
-            const vec_z = start_z - z;
-            if (vec_x * reverse_dir_x + vec_y * reverse_dir_y + vec_z * reverse_dir_z < 0) {
+            if (t_max_x < t_max_y && t_max_x < t_max_z) {
+                block_x += step_x;
+                t_max_x += t_delta_x;
+            } else if (t_max_y < t_max_z) {
+                block_y += step_y;
+                t_max_y += t_delta_y;
+            } else {
+                block_z += step_z;
+                t_max_z += t_delta_z;
+            }
+            
+            if (block_x === end_block_pos_x && block_y === end_block_pos_y && block_z === end_block_pos_z) {
                 break;
             }
-            
-            let x_dis, y_dis, z_dis;
-            
-            if (reverse_dir_x > 0) {
-                x_dis = (Math.floor(x + (1 + 1e-6)) - x) / reverse_dir_x;
-            } else if (reverse_dir_x < 0) {
-                x_dis = (Math.ceil(x - (1 + 1e-6)) - x) / reverse_dir_x;
-            } else {
-                x_dis = Infinity;
-            }
-                
-            if (reverse_dir_y > 0) {
-                y_dis = (Math.floor(y + (1 + 1e-6)) - y) / reverse_dir_y;
-            } else if (reverse_dir_y < 0) {
-                y_dis = (Math.ceil(y - (1 + 1e-6)) - y) / reverse_dir_y;
-            } else {
-                y_dis = Infinity;
-            }
-                
-            if (reverse_dir_z > 0) {
-                z_dis = (Math.floor(z + (1 + 1e-6)) - z) / reverse_dir_z;
-            } else if (reverse_dir_z < 0) {
-                z_dis = (Math.ceil(z - (1 + 1e-6)) - z) / reverse_dir_z;
-            } else {
-                z_dis = Infinity;
-            }
-            
-            const min_dis = Math.min(Math.abs(x_dis), Math.abs(y_dis), Math.abs(z_dis));
-            x += min_dis * reverse_dir_x;
-            y += min_dis * reverse_dir_y;
-            z += min_dis * reverse_dir_z;
         }
         
         Container.current_player_mode = null;
@@ -1026,28 +1032,19 @@ class TickEvent {
         const dir_y = -Math.sin(pitch_rad);
         const dir_z = Math.cos(yaw_rad) * Math.cos(pitch_rad);
         const cos_threshold = Math.cos(45 * Math.PI / 180);
-        
-        const pos_list = [];
-        for (const [dx, dy, dz] of this.positions) {
-            const dis = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if (dx * dir_x + dy * dir_y + dz * dir_z > cos_threshold * dis) {
-                pos_list.push([dx, dy, dz, dis]);
-            }
-        }
-        
-        pos_list.sort((a, b) => a[1] - b[1] || a[3] - b[3]);
-        
+
         Container.current_player_mode = player.gameMode;
         Container.current_player = player;
         Container.send_info = false;
-        
         const pc = new Container(player.getInventory());
-        for (const [dx, dy, dz, dis] of pos_list) {
-            if (this.set_block_player_setting(pc, player, player_setting, new IntPos(cx + dx, cy + dy, cz + dz, dimid))) {
-                break;
+        for (const [dx, dy, dz, dis] of this.positions) {
+            if (dx * dir_x + dy * dir_y + dz * dir_z > cos_threshold * dis) {
+                if (this.set_block_player_setting(pc, player, player_setting, new IntPos(cx + dx, cy + dy, cz + dz, dimid))) {
+                    break;
+                }
             }
         }
-        
+
         Container.current_player_mode = null;
         Container.current_player = null;
     }
