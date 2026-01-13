@@ -5,7 +5,7 @@
             "identifier": "ap:4_6",
             "basic_render_parameters": {
                 "material": "particles_blend",
-                "texture": "particles/base.png"
+                "texture": "particles/template.png"
             }
         },
         "components": {
