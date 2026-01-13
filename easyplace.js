@@ -4199,26 +4199,73 @@ class Ui {
     }
 
     static show_help_form(player) {
-        const fm = mc.newCustomForm();
+        const fm =mc.newSimpleForm();
         fm.setTitle('轻松放置 - 帮助');
+        const help_content = `
+主要功能:
+• 修改: 调整已绑定结构的位置、层数和拦截设置
+• 添加: 将结构文件绑定到当前位置
+• 共享: 将结构设置分享给其他在线玩家
+• 删除: 移除不再需要的结构绑定
+
+使用步骤:
+1. 准备结构文件: 将.mcstructure文件放入bds根目录的structure文件夹(需要自己创建或第一次运行时自动创建)
+2. 打开菜单: 使用/easyplace命令打开主菜单
+3. 绑定结构: 选择'添加结构'来绑定结构到当前位置
+
+功能详解:
+
+偏移量设置:
+- X/Y/Z偏移: 结构相对于您当前位置的偏移量
+- 正数: 向东/上/南方向偏移
+- 负数: 向西/下/北方向偏移
+
+投影纠错功能:
+• 自动检测: 实时检测已放置方块与投影的差异
+• 错误显示: 用特殊材质标记错误的方块位置
+• 错误统计: 在修改结构的ui中找到错误统计查看所有错误信息
+• 性能问题: 减少同时显示的结构数量或使用分层模式
+
+拦截程度:
+- 不拦截: 允许在结构区域内自由放置任何方块
+- 部分拦截: 只拦截结构需要的方块放置错误
+- 完全拦截: 完全禁止在结构区域内放置错误的方块
+
+分层建造:
+- 第0层: 显示和建造整个结构(大型结构慎用)
+- 第1-N层: 逐层建造，适合大型建筑
+- 使用上下层按钮切换当前建造层
+
+工具使用:
+• 手持任意剑类工具: 显示直线范围内的结构预览
+• 手持命名'快速放置'的工具: 沿视线方向自动放置
+• 手持命名'打印放置'的工具: 围绕玩家视线前方的扇形区域放置
+• 右键点击: 在预览区域内手动放置方块, 会被自动放置替换掉, 不可关闭, 一直开启
+
+管理功能:
+• 总材料查看: 显示整个结构所需的所有材料
+• 当前层材料: 显示当前层需要的材料
+• 还需材料: 显示当前层尚未放置的方块材料
+• 背包检查: 对比背包内容显示缺少的材料
+• 错误统计: 显示错误方块的位置和类型
+
+重要注意事项:
+• 大型结构(如64x64x64)建议分层建造，避免卡顿
+• 第0层模式会显示整个结构, 可能影响性能
+• 确保结构文件格式正确，避免加载失败
+• 共享结构时，目标玩家需要在线
+• 材料统计基于方块类型，特殊状态需手动调整
+
+常见问题解决:
+• 结构不显示: 检查文件是否在正确目录，格式是否正确
+• 无法放置方块: 检查拦截设置和背包材料
+• 预览异常: 尝试重新绑定结构或调整位置
+• 性能问题: 减少同时显示的结构数量或使用分层模式
+
+提示: 遇到问题时，可以尝试重新加载插件或重启服务器
+`;
         
-        fm.addLabel("轻松放置插件使用说明:");
-        fm.addDivider();
-        fm.addLabel("1. 修改: 修改结构以及相关信息");
-        fm.addLabel("2. 添加: 添加新的结构以绑定");
-        fm.addLabel("3. 删除: 移除已绑定的结构");
-        fm.addDivider();
-        fm.addLabel("使用步骤:");
-        fm.addLabel("1. 将.mcstructure文件放入structure文件夹");
-        fm.addLabel("2. 使用/easyplace命令打开菜单");
-        fm.addLabel("3. 选择'修改/添加/删除'来设置结构");
-        fm.addDivider();
-        fm.addLabel("功能说明:");
-        fm.addLabel("- 偏移量: 结构相对于放置位置的偏移");
-        fm.addLabel("- 拦截程度: 控制方块放置错误的处理方式");
-        
-        fm.addLabel("- 注意: 默认添加结构时是第1层, 如果结构过大(比如64 * 64 * 64), 请不要轻易调整到第0层(即全部)否则客户端(渲染)和服务端(放置的错误检测)总要有一个卡死");
-        
+        fm.setContent(help_content);
         player.sendForm(fm, Ui.empty_callable);
     }
 
@@ -4720,7 +4767,7 @@ class TickEvent {
             }
                 
             const display_name = hand_item.name;
-            if (!hand_item.type.includes("sword") && (display_name === "快速放置" || display_name === "急速放置")) {
+            if (!hand_item.type.includes("sword") && (display_name === "快速放置" || display_name === "打印放置")) {
                 continue;
             }
             
@@ -4728,7 +4775,7 @@ class TickEvent {
             eye_pos.y = eye_pos.y + 1.6;
             if (display_name.includes("快速放置")) {
                 this.place_along_view(player, eye_pos, player.direction, player_setting);
-            } else if (display_name.includes("急速放置")) {
+            } else if (display_name.includes("打印放置")) {
                 this.place_circle_around_player(player, eye_pos, player.direction, player_setting);
             }
         }
