@@ -471,6 +471,8 @@ class Ui:
         if data is None:
             return
         
+        print(data)
+        
         uuid = player.uuid
         if uuid not in PlayerSettings.players:
             PlayerSettings.players[uuid] = PlayerSettings(uuid)
@@ -478,8 +480,8 @@ class Ui:
         player_setting = PlayerSettings.players[uuid]
         temp_data = player_setting.attached_data
         
-        structure_index = int(data[0])
-        target_player_index = int(data[1])
+        structure_index = int(data[1])
+        target_player_index = int(data[3])
         
         selected_structure = player_setting.structures[structure_index]
         target_player = mc.getPlayer(temp_data["online_players"][target_player_index])

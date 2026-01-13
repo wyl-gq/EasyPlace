@@ -4367,8 +4367,8 @@ class Ui {
         const player_setting = PlayerSettings.players[uuid];
         const temp_data = player_setting.attached_data;
         
-        const structure_index = parseInt(data[0]);
-        const target_player_index = parseInt(data[1]);
+        const structure_index = parseInt(data[1]);
+        const target_player_index = parseInt(data[3]);
         
         const selected_structure = player_setting.structures[structure_index];
         const target_player_uuid = temp_data["online_players"][target_player_index];
