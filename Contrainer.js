@@ -5,7 +5,9 @@ class Container {
     static current_player_mode = 0;
     static current_player = null;
     static send_info = true;
-    
+    static current_tick = 0;
+    // 为放置玩家物品缺失刷屏，记录每个消息的时间，每个消息以最多1s一次发射
+    static item_check_info = {};
     // 盒子太大，缓存盒子内物品信息，减少重复解析
     static box_cache = {};
 
@@ -87,9 +89,8 @@ class Container {
                             const search_item_count = search_item.count;
                             
                             if (count >= search_item_count) {
-                                search_item.setNull();
                                 count -= search_item_count;
-                                items_tag.setTag(i, search_item.getNbt());
+                                items_tag.removeTag(i);
                             } else {
                                 item_nbt.setByte('Count',search_item_count - count);
                                 items_tag.setTag(i, item_nbt);
@@ -136,7 +137,19 @@ class Container {
         if (Container.current_player && Container.send_info) {
             const name = en_to_ch[item.type] || item.type;
             const current_count = this.existing_items_identifier[item_identifier] || 0;
-            Container.current_player.sendText(`物品不足: ${name} 需要数量: ${actual_count} 已有数量: ${current_count}`);
+            const info = `物品不足: ${name} 需要数量: ${actual_count} 已有数量: ${current_count}`;
+
+            const uuid = Container.current_player.uuid;
+            if (!Container.item_check_info[uuid]) {
+                Container.item_check_info[uuid] = {};
+            }
+            
+            const player_infos = Container.item_check_info[uuid];
+            
+            if (!player_infos[info] || (Container.current_tick - player_infos[info] > 40)) {
+                Container.current_player.sendText(info);
+                player_infos[info] = Container.current_tick;
+            }
         }
 
         return false;
@@ -194,7 +207,7 @@ class Container {
         return null;
     }
 
-    shift_item_to(target_item, new_item, check = true) {
+    tran_item_to(target_item, new_item, check = true) {
         if (Container.current_player_mode === PlayerGameMode.creative) {
             return true;
         }

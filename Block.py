@@ -162,12 +162,9 @@ class Block:
     def match(block: StructureBlock, mc_block: LLSE_Block) -> int:
         '''0 为还未放置 1完全不匹配 2为状态不匹配 3 为容器物品/方块实体状态不匹配 4 为匹配成功 '''
 
-        mc_block_type_air = mc_block.type == 'minecraft:air'
-        block_type_air = block.identifier == 'minecraft:air'
-
-        if mc_block_type_air:
-            return 4 if block_type_air else 0
-        elif block_type_air or block.identifier != mc_block.type:
+        if mc_block.type == 'minecraft:air':
+            return 4 if block.is_air else 0
+        elif block.is_air or block.identifier != mc_block.type:
             return 1
 
         if block.states:
@@ -572,7 +569,7 @@ class PowderSnow(Block):
     
     def set_block(self, pos: IntPos, pc: Container, *args) -> bool:
         if pc.check_enougn_item(self.powder_snow_bucket) and mc.setBlock(pos, self.set_block_name):
-            pc.shift_item_to(self.powder_snow_bucket, Block.bucket)
+            pc.tran_item_to(self.powder_snow_bucket, Block.bucket)
             return True
         return False
 
@@ -585,7 +582,7 @@ class Lava(Block):
     def set_block(self, pos: IntPos, pc: Container, *args) -> bool:
         if self.block.states["liquid_depth"] == 0:
             if pc.check_enougn_item(self.lava_bucket) and mc.setBlock(pos, self.set_block_name):
-                pc.shift_item_to(self.lava_bucket, Block.bucket)
+                pc.tran_item_to(self.lava_bucket, Block.bucket)
                 return True
         return False
 

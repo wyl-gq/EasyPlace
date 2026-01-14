@@ -384,6 +384,8 @@ class StructureBlock {
         this.compability_version = compabilityVersion;
         this.identifier = `${namespace}:${baseName}`;
         this.state_str = this.identifier + JSON.stringify(states);
+
+        this.is_air = this.identifier === "minecraft:air";
     }
 
     static from_identifier(identifier, states, compabilityVersion = COMPABILITY_VERSION) {
@@ -401,8 +403,9 @@ class StructureBlock {
 }
 
 class Structure {
-    constructor(size) {
+    constructor(size, name) {
         this.size = size;
+        this.name = name
         this.x = size[0];
         this.y = size[1];
         this.z = size[2];
@@ -420,7 +423,7 @@ class Structure {
         const nbt = _into_pyobj(new NBTFile(data));
 
         const size = [nbt["size"][0], nbt["size"][1], nbt["size"][2]];
-        const struct = new Structure(size);
+        const struct = new Structure(size, file.split('/').pop().replace('.mcstructure', ''));
         struct.structure_indecis = nbt["structure"]["block_indices"][0];
         struct._palette = nbt["structure"]["palette"]["default"]["block_palette"].map(block => 
             StructureBlock.from_identifier(block["name"], block["states"], block["version"])

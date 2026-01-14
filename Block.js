@@ -195,12 +195,9 @@ class Block {
     }
 
     static match(block, mc_block) {
-        const mc_block_type_air = mc_block.type === 'minecraft:air';
-        const block_type_air = block.identifier === 'minecraft:air';
-
-        if (mc_block_type_air) {
-            return block_type_air ? 4 : 0;
-        } else if (block_type_air || block.identifier !== mc_block.type) {
+        if (mc_block.type === 'minecraft:air') {
+            return block.is_air ? 4 : 0;
+        } else if (block.is_air|| block.identifier !== mc_block.type) {
             return 1;
         }
 
@@ -708,7 +705,7 @@ class PowderSnow extends Block {
     
     set_block(pos, pc, ...args) {
         if (pc.check_enougn_item(PowderSnow.powder_snow_bucket) && mc.setBlock(pos, this.set_block_name)) {
-            pc.shift_item_to(PowderSnow.powder_snow_bucket, Block.bucket);
+            pc.tran_item_to(PowderSnow.powder_snow_bucket, Block.bucket);
             return true;
         }
         return false;
@@ -724,7 +721,7 @@ class Lava extends Block {
     set_block(pos, pc, ...args) {
         if (this.block.states.liquid_depth === 0) {
             if (pc.check_enougn_item(Lava.lava_bucket) && mc.setBlock(pos, this.set_block_name)) {
-                pc.shift_item_to(Lava.lava_bucket, Block.bucket);
+                pc.tran_item_to(Lava.lava_bucket, Block.bucket);
                 return true;
             }
         }

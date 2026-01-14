@@ -6,13 +6,16 @@ class Container:
     current_player_mode: int|None = 0
     current_player: LLSE_Player|None = None
     send_info: bool = True
+    current_tick: int = 0
+    #为放置玩家物品缺失刷屏，记录每个消息的时间，每个消息以最多1s一次发射
+    item_check_info: dict[str, dict[str, int]] = {} #uuid : (info: last_tick)
     
     #盒子太大，缓存盒子内物品信息，减少重复解析
     box_cache: dict[str, dict] = {}
 
     def __init__(self, container: LLSE_Container) -> None:
         self.container = container
-
+        
         self.shulkers: list[LLSE_Item] = [] 
         self.bundles: list[LLSE_Item] = []
         self.items: list[LLSE_Item] = []
@@ -69,9 +72,8 @@ class Container:
                             search_item: LLSE_Item = mc.newItem(item_nbt) # type: ignore
                             search_item_count = search_item.count
                             if count >= search_item_count:
-                                search_item.setNull()
                                 count -= search_item_count
-                                items_tag.setTag(i, search_item.getNbt())
+                                items_tag.removeTag(i)
                             else:
                                 item_nbt.setByte("Count", search_item_count - count)
                                 items_tag.setTag(i, item_nbt)
@@ -106,7 +108,17 @@ class Container:
         if self.current_player and self.send_info:
             name = en_to_ch.get(item.type, item.type)
             current_count = self.existing_items_identifier.get(item_identifier, 0)
-            self.current_player.sendText(f"物品不足: {name} 需要数量: {count} 已有数量: {current_count}")
+            info = f"物品不足: {name} 需要数量: {count} 已有数量: {current_count}"
+            
+            uuid = self.current_player.uuid
+            if uuid not in self.item_check_info:
+                self.item_check_info[self.current_player.uuid] = {}
+                
+            player_infos = self.item_check_info[self.current_player.uuid]
+            
+            if info not in player_infos or self.current_tick - player_infos[info] > 40:
+                self.current_player.sendText(info)
+                player_infos[info] = self.current_tick
 
         return False
 
@@ -142,7 +154,7 @@ class Container:
                             item_nbt.setByte('Count', target_item.count)
                             return mc.newItem(item_nbt)
 
-    def shift_item_to(self, target_item: Item, new_item: LLSE_Item, check: bool = True) -> bool:
+    def tran_item_to(self, target_item: Item, new_item: LLSE_Item, check: bool = True) -> bool:
         if self.current_player_mode == PlayerGameMode.creative:
             return True
 

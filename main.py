@@ -4,38 +4,64 @@ from mc_base import *
 from Contrainer import Container
 from Item import Item
 from Structure import Structure, StructureBlock
+from enum import Enum
 import traceback
 
+class prevent_mismatch(Enum):
+    no = 0
+    part = 1
+    all = 2
+
+class error_project_level(Enum):
+    all = 0                # 显示所有错误
+    without_not_place = 1  # 不显示"未放置"类错误
+    no = 2                 # 不投影
+
 class Structure_Setting:
-    structures: dict[str, Structure] = {}
+    structures_dict: dict[str, Structure] = {}
+    structures: list[Structure] = []
     structures_materials_layer_format: dict[str, list[str]] = {}
-    def __init__(self, name: str, pos: tuple[int, int, int, int], prevent_mismatch_level: int = 0, current_layer: int = 0) -> None:
+    def __init__(
+        self,
+        name: str,
+        pos: tuple[int, int, int, int],
+        current_layer: int = 0,
+        prevent_level: prevent_mismatch = prevent_mismatch.no,
+        project_level: error_project_level = error_project_level.all
+    ) -> None:
 
         self.name = name
-        self.structure = self.structures[self.name]
+        self.structure = self.structures_dict[self.name]
 
         self.re_init(
             pos,
-            prevent_mismatch_level,
             current_layer,
+            prevent_level,
+            project_level,
         )
 
-    def re_init(self, pos: tuple[int, int, int, int] = None,
-                 prevent_mismatch_level: int = None, current_layer: int = None) -> None:
+    def re_init(
+        self,
+        pos: tuple[int, int, int, int] = None,
+        current_layer: int = None,
+        prevent_level: prevent_mismatch = None,
+        project_level: error_project_level = None
+    ) -> None:
 
         self.pos = pos if pos is not None else self.pos
-        self.prevent_mismatch_level = prevent_mismatch_level if prevent_mismatch_level is not None else self.prevent_mismatch_level
         self.current_layer = current_layer if current_layer is not None else self.current_layer
+        self.prevent_level = prevent_level if prevent_level is not None else self.prevent_level
+        self.project_level = project_level if project_level is not None else self.project_level
 
         self.all_block_air: list[tuple[tuple, tuple, IntPos]] = []
         self.all_block_without_air: list[tuple[tuple, tuple, IntPos]] = []
         self.all_block: list[tuple[tuple, tuple, IntPos]] = []
-        
+
         all_block_air = self.all_block_air
         all_block_without_air = self.all_block_without_air
         all_block = self.all_block
 
-        structure = self.structures[self.name]
+        structure = self.structure
         size_x, size_y, size_z = structure.size
         pos_x, pos_y, pos_z, dimid = self.pos
 
@@ -51,20 +77,20 @@ class Structure_Setting:
                     new_data = (coord, (wx, wy, wz, dimid), IntPos(wx, wy, wz, dimid))
                     if structure.get_block_no_check(coord).identifier in black_block_name: # type: ignore
                         continue
-                    
+
                     all_block.append(new_data)
                     if structure.get_block_no_check(coord).identifier == 'minecraft:air':
                         all_block_air.append(new_data)
                     else:
                         all_block_without_air.append(new_data)
-                    
+
     def get_block(self, pos: IntPos|tuple[int, int, int]|tuple[int, int, int, int]) -> None|StructureBlock:
         size_x, size_y, size_z = self.structure.size
         x, y, z = pos[:3] if isinstance(pos, tuple) else (pos.x, pos.y, pos.z)
         rel_x = x - self.pos[0]
         rel_y = y - self.pos[1]
         rel_z = z - self.pos[2]
-        
+
         if not (0 <= rel_x < size_x and 0 <= rel_y < size_y and 0 <= rel_z < size_z):
             return None
 
@@ -99,6 +125,7 @@ class Structure_Setting:
 
         result.pop('', None)
         return result
+    
     @classmethod
     def get_structure_files(cls) -> None:
         structure_dir = "structure"
@@ -110,29 +137,30 @@ class Structure_Setting:
         for file in files_list:
             if file.endswith(".mcstructure"):
                 file_name = file[:-12]  # 去掉 .mcstructure 后缀
-                if file_name in cls.structures:
+                if file_name in cls.structures_dict:
                     continue
 
                 try:
                     structure = Structure.load(structure_dir + '/' + file)
-                    
+
                     size_y = structure.size[1]
-                    
-                    cls.structures[file_name] = structure
+                    cls.structures_dict[file_name] = structure
+                    cls.structures.append(structure)
                     cls.structures_materials_layer_format[file_name] = [
                         Ui.format_materials_for_display(get_structure_materials(structure, layer)) 
                         for layer in range(0, size_y + 1)
                     ]
-                    
+
                     print(f'已加载结构：{file} (大小{structure.size})')
                 except Exception as e: 
                     if file_name in cls.structures:
-                        cls.structures.pop(file_name, None)
-                    if file_name in cls.structures_materials_layer_format:
-                        cls.structures_materials_layer_format.pop(file_name, None)
+                        cls.structures_dict.pop(file_name, None)
+                        cls.structures.pop()
+                        
+                    cls.structures_materials_layer_format.pop(file_name, None)
                     print(traceback.format_exc())
                     print(f'无法打开结构文件: {file_name}，原因: {e}')
-                    
+
 class PlayerSettings:
     players: dict[str, 'PlayerSettings'] = {}
     def __init__(self, uuid: str):
@@ -157,6 +185,7 @@ class PlayerSettings:
     @classmethod
     def player_left(cls, player: LLSE_Player) -> None:
         cls.players.pop(player.uuid, None)
+        Container.item_check_info.pop(player.uuid, None)
 
 class Ui:
     @staticmethod
@@ -232,31 +261,21 @@ class Ui:
         
         fm = mc.newCustomForm()
         fm.setTitle('轻松放置 - 添加结构')
+        player_pos = player.blockPos
+        fm.addLabel(f"当前位置: ({player_pos.x}, {player_pos.y}, {player_pos.z})")
         
-        available_structures = []
-        bound_structure_names = {struct.name for struct in player_setting.structures}
-        
-        for structure_name, structure in Structure_Setting.structures.items():
-            if structure_name not in bound_structure_names:
-                size_info = f"{structure.size[0]}x{structure.size[1]}x{structure.size[2]}"
-                available_structures.append((structure_name, size_info))
+        player_structues_dict = player_setting.structues_dict
+        available_structures = [struct for struct in Structure_Setting.structures if struct.name not in player_structues_dict]
         
         if not available_structures:
             fm.addLabel("暂无可用结构文件，请将.mcstructure文件放入structure文件夹")
             player.sendForm(fm, Ui.empty_callable)
             return
         
-        structure_options = [f"{name} (大小: {size})" for name, size in available_structures]
+        structure_options = [f"{struct.name} (大小: {struct.size})" for struct in available_structures]
         fm.addDropdown("选择要添加的结构", structure_options)
-        
-        player_pos = player.blockPos
-        fm.addLabel(f"当前位置: ({player_pos.x}, {player_pos.y}, {player_pos.z})")
-        
-        fm.addInput("X偏移", "X轴偏移量", "0")
-        fm.addInput("Y偏移", "Y轴偏移量", "0")
-        fm.addInput("Z偏移", "Z轴偏移量", "0")
-        
         fm.addStepSlider("错误放置拦截程度", ["不拦截", "部分拦截", "完全拦截"], 0)
+        fm.addStepSlider("方块投影纠错程度", ["全投影", "部分投影", "不投影"], 0)
         
         player_setting.attached_data = {
             "available_structures": available_structures,
@@ -348,6 +367,11 @@ class Ui:
 • 错误统计: 在修改结构的ui中找到错误统计查看所有错误信息
 • 性能问题: 减少同时显示的结构数量或使用分层模式
 
+投影纠错设置:
+- 全投影: 显示所有类型的错误方块（未放置、类型不匹配、状态不匹配、容器状态/方块实体状态不匹配）
+- 部分投影: 不显示"未放置"类错误，只显示已放置但错误的方块
+- 不投影: 完全关闭错误方块投影显示
+
 拦截程度:
 - 不拦截: 允许在结构区域内自由放置任何方块
 - 部分拦截: 只拦截结构需要的方块放置错误
@@ -401,23 +425,30 @@ class Ui:
             PlayerSettings.players[uuid] = PlayerSettings(uuid)
         player_setting = PlayerSettings.players[uuid]
         structure_setting = player_setting.structures[id]
-        
+        Ui.modify_select(player, player_setting, structure_setting)
+    @staticmethod
+    def modify_select(player: LLSE_Player, player_setting: PlayerSettings, structure_setting: Structure_Setting) -> None:
         fm = mc.newSimpleForm()
         fm.setTitle(f'修改结构 - {structure_setting.name}')
         
         current_layer = structure_setting.current_layer if structure_setting.current_layer > 0 else "全部"
         
         info_text = f"位置: {structure_setting.pos[:3]} 大小: {structure_setting.structure.size} 当前层: {current_layer}\n"
-        info_text += f"拦截程度: {['不拦截', '部分拦截', '完全拦截'][structure_setting.prevent_mismatch_level]}"
+        info_text += f"拦截程度: {['不拦截', '部分拦截', '完全拦截'][structure_setting.prevent_level.value]}"
         
         fm.setContent(info_text)
         
         fm.addButton("向上一层")
         fm.addButton("向下一层")
         fm.addButton("移动到当前位置")
-        fm.addButton("拦截程度设置：不拦截")
-        fm.addButton("拦截程度设置：部分拦截")
-        fm.addButton("拦截程度设置：完全拦截")
+        
+        fm.addButton("拦截程度设置： 不拦截")
+        fm.addButton("拦截程度设置： 部分拦截")
+        fm.addButton("拦截程度设置： 完全拦截")
+        
+        fm.addButton("投影纠错设置： 全投影")
+        fm.addButton("投影纠错设置： 部分投影")
+        fm.addButton("投影纠错设置： 不投影")
         
         fm.addButton("详细设置")
         
@@ -445,33 +476,28 @@ class Ui:
         player_setting = PlayerSettings.players[uuid]
         temp_data = player_setting.attached_data
         
-        selected_index = int(data[0])
-        structure_name, _ = temp_data["available_structures"][selected_index]
-        
-        offset_x = int(data[2]) if data[2] else 0
-        offset_y = int(data[3]) if data[3] else 0
-        offset_z = int(data[4]) if data[4] else 0
-        
-        prevent_level = int(data[5])
+        structure = temp_data["available_structures"][int(data[1])]
+        prevent_level = int(data[2])
+        project_level = int(data[3])
         
         structure_setting = Structure_Setting(
-            name=structure_name,
-            pos=tuple(i + j for i,j in zip(temp_data["player_pos"], (offset_x, offset_y, offset_z, 0))),
-            prevent_mismatch_level=prevent_level,
-            current_layer=1
+            name=structure.name,
+            pos=temp_data["player_pos"],
+            current_layer=1,
+            prevent_level=prevent_mismatch(prevent_level),
+            project_level=error_project_level(project_level),
         )
         
         player_setting.add_structure(structure_setting)
         
-        player.sendText(f"✓ 成功添加结构: {structure_name}")
+        player.sendText(f"✓ 成功添加结构: {structure.name}")
         player.sendText(f"  位置: {structure_setting.pos[:3]}")
         player.sendText(f"  拦截程度: {['不拦截', '部分拦截', '完全拦截'][prevent_level]}")
+        player.sendText(f"  投影程度: {['全投影', '部分投影', '不投影'][project_level]}")
     @staticmethod
     def form_share_structure_callable(player: LLSE_Player, data: list|None, reason: int) -> None:
         if data is None:
             return
-        
-        print(data)
         
         uuid = player.uuid
         if uuid not in PlayerSettings.players:
@@ -497,6 +523,8 @@ class Ui:
             target_player.sendText(f"✓ 玩家 {player.name} 与你共享了结构 '{selected_structure.name}'")
         else:
             player.sendText(f"未找到玩家 或许已离开")
+        
+        Ui.show_share_structure_form(player)
     @staticmethod
     def form_remove_structure_callable(player: LLSE_Player, data: list|None, reason: int) -> None:
         if data is None:
@@ -517,7 +545,6 @@ class Ui:
         
         if len(remove_structures) > 0:
             player.sendText(f"成功删除 {len(remove_structures)} 个结构设置")
-            
     @staticmethod
     def form_modify_operation_callable(player: LLSE_Player, id: int|None, reason: int) -> None:
         if id is None:
@@ -533,42 +560,47 @@ class Ui:
         if id == 0:
             size_y = structure_setting.structure.size[1]
             structure_setting.re_init(current_layer=(structure_setting.current_layer + 1) % (size_y + 1))
+            Ui.modify_select(player, player_setting, structure_setting)
         elif id == 1:
             size_y = structure_setting.structure.size[1]
             structure_setting.re_init(current_layer=(structure_setting.current_layer + size_y) % (size_y + 1))
+            Ui.modify_select(player, player_setting, structure_setting)
         elif id == 2:
             pos = player.blockPos
             structure_setting.re_init(pos=(pos.x, pos.y, pos.z, pos.dimid))
+            Ui.modify_select(player, player_setting, structure_setting)
         elif 3 <= id <= 5:
-            structure_setting.re_init(prevent_mismatch_level = id - 3)
-            
-        elif id == 6:
+            structure_setting.re_init(prevent_level = prevent_mismatch(id - 3))
+            Ui.modify_select(player, player_setting, structure_setting)
+        elif 6 <= id <= 8:
+            structure_setting.re_init(project_level = error_project_level(id - 6))
+            Ui.modify_select(player, player_setting, structure_setting)
+        elif id == 9:
             Ui.show_detail_settings_form(player, structure_setting)
-            
-        elif id == 7:
+        elif id == 10:
             fm = mc.newSimpleForm()
             fm.setContent(Structure_Setting.structures_materials_layer_format[structure_setting.name][0])
             player.sendForm(fm, Ui.empty_callable)
-        elif id == 8:
+        elif id == 11:
             fm = mc.newSimpleForm()
             fm.setContent(structure_setting.get_current_lalyer_all_materials())
             player.sendForm(fm, Ui.empty_callable)
-        elif id == 9:
+        elif id == 12:
             fm = mc.newSimpleForm()
             fm.setContent(Ui.format_materials_for_display(structure_setting.get_needed_materials()))
             player.sendForm(fm, Ui.empty_callable)
-        elif id == 10:
+        elif id == 13:
             fm = mc.newSimpleForm()
             fm.setContent(Ui.format_materials_for_display(Container(player.getInventory()).get_miss_item(structure_setting.get_needed_materials())))
             player.sendForm(fm, Ui.empty_callable)
-        elif 11 <= id <= 12:
+        elif 14 <= id <= 15:
             error_stats = [0, 0, 0, 0]
             error_info = []  
             total_errors = 0
             
-            if id == 12:
+            if id == 15:
                 layer = structure_setting.current_layer
-                structure_setting.re_init(current_layer=layer)
+                structure_setting.re_init(current_layer=0)
             
             for rel_pos, pos, intpos in structure_setting.all_block:
                 mc_block: LLSE_Block|None = mc.getBlock(intpos)
@@ -583,7 +615,7 @@ class Ui:
                     error_type = ("方块未放置", "方块类型不匹配", "方块状态不匹配", "容器物品/方块实体状态不匹配")[match_level]
                     error_info.append(f"({intpos.x},{intpos.y},{intpos.z}) —— {error_type}")
                     
-            if id == 12:
+            if id == 15:
                 structure_setting.re_init(current_layer=layer)
             
             fm = mc.newSimpleForm()
@@ -624,16 +656,19 @@ class Ui:
         fm.addInput("Y偏移", "Y轴偏移量", "0")
         fm.addInput("Z偏移", "Z轴偏移量", "0")
         
-        default_prevent = structure_setting.prevent_mismatch_level
-        fm.addStepSlider("错误放置拦截程度", ["不拦截", "部分拦截", "完全拦截"], default_prevent)
-        
         default_layer = structure_setting.current_layer
         max_layers = structure_obj.size[1] if structure_obj else 1
         fm.addSlider("放置层数(0=全部)", 0, max(max_layers, 1), 1, default_layer)
         
-        player.sendForm(fm, Ui.form_add_modify_structure)
+        default_prevent = structure_setting.prevent_level
+        fm.addStepSlider("错误放置拦截程度", ["不拦截", "部分拦截", "完全拦截"], default_prevent.value)
+        
+        default_project = structure_setting.project_level
+        fm.addStepSlider("方块投影纠错程度", ["全投影", "部分投影", "不投影"], default_project.value)
+        
+        player.sendForm(fm, Ui.form_detail_settings_callable)
     @staticmethod
-    def form_add_modify_structure(player: LLSE_Player, data: list|None, reason: int) -> None:
+    def form_detail_settings_callable(player: LLSE_Player, data: list|None, reason: int) -> None:
         if data is None:
             return
         
@@ -654,14 +689,16 @@ class Ui:
             
         pos = (pos[0] + int(data[2]), pos[1] + int(data[3]), pos[2] + int(data[4]), pos[3])
         
-        prevent_level = int(data[5])
-        current_layer = int(data[6])
+        current_layer = int(data[5])
+        prevent_level = int(data[6])
+        project_level = int(data[7])
         
         structure_setting = Structure_Setting(
             name=structure_name,
             pos=pos,
-            prevent_mismatch_level=prevent_level,
             current_layer=current_layer,
+            prevent_level=prevent_mismatch(prevent_level),
+            project_level=error_project_level(project_level),
         )
         
         player_setting.add_structure(structure_setting)
@@ -710,12 +747,63 @@ class Ui:
         
         return "\n".join(lines)
 
-class TickEvent:
+class Project:
     @classmethod
     def init(cls) -> None:
-        cls.tick = 10
-        cls.ps: ParticleSpawner = mc.newParticleSpawner()
-        
+        cls.ps: ParticleSpawner = mc.newParticleSpawner() 
+    @classmethod
+    def project(cls, tick: int) -> None:        
+        ps = cls.ps
+        project_info = []
+        for structure_setting in set(
+            structure_setting
+            for player in PlayerSettings.players.values()
+            for structure_setting in player.structures
+            if structure_setting.project_level != error_project_level.no
+        ):
+            structure = structure_setting.structure
+            length = len(structure_setting.all_block_air)
+            chunk_size = ceil(length / 30)
+            chunk_start = chunk_size * (tick % 30)
+            project_level = structure_setting.project_level
+
+            project_blocks = structure_setting.all_block_air[chunk_start : min(chunk_start + chunk_size, length)]
+            for rel_pos, pos, intpos in project_blocks:
+                mc_block: LLSE_Block|None = mc.getBlock(intpos)
+                if mc_block is None:
+                    continue
+
+                if mc_block.type != 'minecraft:air':
+                    project_info.append(("ap:2_", intpos))
+
+            length = len(structure_setting.all_block_without_air)
+            chunk_size = ceil(length / 30)
+            chunk_start = chunk_size * (tick % 30)
+            project_blocks = structure_setting.all_block_without_air[chunk_start : min(chunk_start + chunk_size, length)]
+
+            for rel_pos, pos, intpos in project_blocks:
+                mc_block: LLSE_Block|None = mc.getBlock(intpos)
+                if mc_block is None:
+                    continue
+
+                if mc_block.type == 'minecraft:air':
+                    if project_level != error_project_level.without_not_place:
+                        project_info.append(("ap:1_", intpos))
+                else:
+                    match_res = Block.match(structure.get_block_no_check(rel_pos), mc_block)
+                    if match_res != 4:
+                        particle = ("ap:1_", "ap:2_", "ap:3_", "ap:4_")[match_res]
+                        project_info.append((particle, intpos))
+
+        for particle, intpos in project_info:
+            ps.spawnParticle(intpos, particle + "1")
+            ps.spawnParticle(intpos, particle + "2")
+            ps.spawnParticle(intpos, particle + "5")
+            ps.spawnParticle(intpos, particle + "6")
+
+class Quick_place:
+    @classmethod
+    def init(cls) -> None:
         r = 6
         r_sq = r * r
         cls.positions = []
@@ -728,67 +816,10 @@ class TickEvent:
                         cls.positions.append((dx, dy, dz, sqrt(dis)))
                         
         cls.positions.sort(key=lambda p: (p[1], p[3]))
+    
     @classmethod
-    def tick_event(cls) -> None:
-        cls.tick += 1
-        try:
-            cls.project()
-            cls.set_line_range()
-        except Exception as e:
-            print(traceback.format_exc())
-            pass
-        
-    @classmethod
-    def project(cls) -> None:        
-        ps = cls.ps
-        processed_pos = set()
-        for structure_setting in set(structure_setting for player in PlayerSettings.players.values() for structure_setting in player.structures):
-            structure = structure_setting.structure
-            length = len(structure_setting.all_block_air)
-            chunk_size = ceil(length / 30)
-            chunk_start = chunk_size * (cls.tick % 30)
-            for rel_pos, pos, intpos in structure_setting.all_block_air[chunk_start : min(chunk_start + chunk_size, length)]:
-                if pos in processed_pos:
-                    continue
-                
-                mc_block: LLSE_Block|None = mc.getBlock(intpos)
-                if mc_block is None:
-                    continue
-                
-                if mc_block.type != 'minecraft:air':
-                    processed_pos.add(pos)
-                    ps.spawnParticle(intpos, "ap:2_1")
-                    ps.spawnParticle(intpos, "ap:2_2")
-                    ps.spawnParticle(intpos, "ap:2_5")
-                    ps.spawnParticle(intpos, "ap:2_6")
-                    
-            length = len(structure_setting.all_block_without_air)
-            chunk_size = ceil(length / 30)
-            chunk_start = chunk_size * (cls.tick % 30)
-            for rel_pos, pos, intpos in structure_setting.all_block_without_air[chunk_start : min(chunk_start + chunk_size, length)]:
-                
-                mc_block: LLSE_Block|None = mc.getBlock(intpos)
-                if mc_block is None:
-                    continue
-                
-                if mc_block.type == 'minecraft:air':
-                    processed_pos.add(pos)
-                    ps.spawnParticle(intpos, "ap:1_1")
-                    ps.spawnParticle(intpos, "ap:1_2")
-                    ps.spawnParticle(intpos, "ap:1_5")
-                    ps.spawnParticle(intpos, "ap:1_6")
-                else:
-                    match_res = Block.match(structure.get_block_no_check(rel_pos), mc_block)
-                    particle = ("ap:1_", "ap:2_", "ap:3_", "ap:4_", "")[match_res] # type: ignore
-                    if particle:
-                        processed_pos.add(pos)
-                        ps.spawnParticle(intpos, particle + "1")
-                        ps.spawnParticle(intpos, particle + "2")
-                        ps.spawnParticle(intpos, particle + "5")
-                        ps.spawnParticle(intpos, particle + "6")
-    @classmethod
-    def set_line_range(cls) -> None:
-        if cls.tick % 2 == 0:
+    def place(cls, tick: int) -> None:
+        if tick % 2 == 0:
             return
         
         for player_uuid, player_setting in PlayerSettings.players.items():
@@ -813,7 +844,6 @@ class TickEvent:
                 cls.place_along_view(player, eye_pos, player.direction, player_setting)
             elif "打印放置" in display_name:
                 cls.place_circle_around_player(player, eye_pos, player.direction, player_setting)
-
     @classmethod
     def place_along_view(cls, player: LLSE_Player, start_pos: FloatPos, direction: DirectionAngle, player_setting: PlayerSettings) -> None:
         max_distance = 6
@@ -865,7 +895,7 @@ class TickEvent:
         pc = Container(player.getInventory())
         Container.current_player_mode = player.gameMode
         Container.current_player = player
-        Container.send_info = False
+        Container.send_info = True
         
         for _ in range(max_distance * 4):
             if cls.set_block_player_setting(pc, player, player_setting, IntPos(block_x, block_y, block_z, dimid)):
@@ -901,7 +931,7 @@ class TickEvent:
         
         Container.current_player_mode = player.gameMode
         Container.current_player = player
-        Container.send_info = False
+        Container.send_info = True
         pc = Container(player.getInventory())
         
         for dx, dy, dz, dis in cls.positions:
@@ -933,6 +963,22 @@ class TickEvent:
                     return True
 
         return False
+
+class TickEvent:
+    @classmethod
+    def init(cls) -> None:
+        cls.tick = 0
+    
+    @classmethod
+    def tick_event(cls) -> None:
+        cls.tick += 1
+        try:
+            Project.project(cls.tick)
+            Quick_place.place(cls.tick)
+            Container.current_tick = cls.tick
+        except Exception as e:
+            print(traceback.format_exc())
+            pass
 
 def set_block(player: LLSE_Player, pos: IntPos) -> tuple[bool,bool]:
     '''第一个是拦截玩家， 第2个是放置成功'''
@@ -973,9 +1019,9 @@ def set_block(player: LLSE_Player, pos: IntPos) -> tuple[bool,bool]:
                 player.refreshItems()
                 return True, True
 
-            prevent = False if structure_setting.prevent_mismatch_level == 0 else True
+            prevent = False if structure_setting.prevent_level == prevent_mismatch.no else True
         else:
-            prevent = True if structure_setting.prevent_mismatch_level == 2 else False
+            prevent = True if structure_setting.prevent_level == prevent_mismatch.all else False
 
     Container.current_player_mode = None
     Container.current_player = None
@@ -994,10 +1040,17 @@ ui_command.overload([])
 ui_command.setCallback(Ui.show_main_form)
 ui_command.setup()
 
+ui_command = mc.newCommand('ep', 'ep', PermType.Any)
+ui_command.overload([])
+ui_command.setCallback(Ui.show_main_form)
+ui_command.setup()
+
 def init():
     try:
         print('轻松放置 初始化加载结构中')
         Blockinit()
+        Project.init()
+        Quick_place.init()
         TickEvent.init()
         Structure_Setting.get_structure_files()
     except Exception as e:

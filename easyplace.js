@@ -2158,6 +2158,8 @@ class StructureBlock {
         this.compability_version = compabilityVersion;
         this.identifier = `${namespace}:${baseName}`;
         this.state_str = this.identifier + JSON.stringify(states);
+
+        this.is_air = this.identifier === "minecraft:air";
     }
 
     static from_identifier(identifier, states, compabilityVersion = COMPABILITY_VERSION) {
@@ -2175,8 +2177,9 @@ class StructureBlock {
 }
 
 class Structure {
-    constructor(size) {
+    constructor(size, name) {
         this.size = size;
+        this.name = name
         this.x = size[0];
         this.y = size[1];
         this.z = size[2];
@@ -2194,7 +2197,7 @@ class Structure {
         const nbt = _into_pyobj(new NBTFile(data));
 
         const size = [nbt["size"][0], nbt["size"][1], nbt["size"][2]];
-        const struct = new Structure(size);
+        const struct = new Structure(size, file.split('/').pop().replace('.mcstructure', ''));
         struct.structure_indecis = nbt["structure"]["block_indices"][0];
         struct._palette = nbt["structure"]["palette"]["default"]["block_palette"].map(block => 
             StructureBlock.from_identifier(block["name"], block["states"], block["version"])
@@ -2393,7 +2396,9 @@ class Container {
     static current_player_mode = 0;
     static current_player = null;
     static send_info = true;
-    
+    static current_tick = 0;
+    // 为放置玩家物品缺失刷屏，记录每个消息的时间，每个消息以最多1s一次发射
+    static item_check_info = {};
     // 盒子太大，缓存盒子内物品信息，减少重复解析
     static box_cache = {};
 
@@ -2475,9 +2480,8 @@ class Container {
                             const search_item_count = search_item.count;
                             
                             if (count >= search_item_count) {
-                                search_item.setNull();
                                 count -= search_item_count;
-                                items_tag.setTag(i, search_item.getNbt());
+                                items_tag.removeTag(i);
                             } else {
                                 item_nbt.setByte('Count',search_item_count - count);
                                 items_tag.setTag(i, item_nbt);
@@ -2524,7 +2528,19 @@ class Container {
         if (Container.current_player && Container.send_info) {
             const name = en_to_ch[item.type] || item.type;
             const current_count = this.existing_items_identifier[item_identifier] || 0;
-            Container.current_player.sendText(`物品不足: ${name} 需要数量: ${actual_count} 已有数量: ${current_count}`);
+            const info = `物品不足: ${name} 需要数量: ${actual_count} 已有数量: ${current_count}`;
+
+            const uuid = Container.current_player.uuid;
+            if (!Container.item_check_info[uuid]) {
+                Container.item_check_info[uuid] = {};
+            }
+            
+            const player_infos = Container.item_check_info[uuid];
+            
+            if (!player_infos[info] || (Container.current_tick - player_infos[info] > 40)) {
+                Container.current_player.sendText(info);
+                player_infos[info] = Container.current_tick;
+            }
         }
 
         return false;
@@ -2582,7 +2598,7 @@ class Container {
         return null;
     }
 
-    shift_item_to(target_item, new_item, check = true) {
+    tran_item_to(target_item, new_item, check = true) {
         if (Container.current_player_mode === PlayerGameMode.creative) {
             return true;
         }
@@ -2930,12 +2946,9 @@ class Block {
     }
 
     static match(block, mc_block) {
-        const mc_block_type_air = mc_block.type === 'minecraft:air';
-        const block_type_air = block.identifier === 'minecraft:air';
-
-        if (mc_block_type_air) {
-            return block_type_air ? 4 : 0;
-        } else if (block_type_air || block.identifier !== mc_block.type) {
+        if (mc_block.type === 'minecraft:air') {
+            return block.is_air ? 4 : 0;
+        } else if (block.is_air|| block.identifier !== mc_block.type) {
             return 1;
         }
 
@@ -3443,7 +3456,7 @@ class PowderSnow extends Block {
     
     set_block(pos, pc, ...args) {
         if (pc.check_enougn_item(PowderSnow.powder_snow_bucket) && mc.setBlock(pos, this.set_block_name)) {
-            pc.shift_item_to(PowderSnow.powder_snow_bucket, Block.bucket);
+            pc.tran_item_to(PowderSnow.powder_snow_bucket, Block.bucket);
             return true;
         }
         return false;
@@ -3459,7 +3472,7 @@ class Lava extends Block {
     set_block(pos, pc, ...args) {
         if (this.block.states.liquid_depth === 0) {
             if (pc.check_enougn_item(Lava.lava_bucket) && mc.setBlock(pos, this.set_block_name)) {
-                pc.shift_item_to(Lava.lava_bucket, Block.bucket);
+                pc.tran_item_to(Lava.lava_bucket, Block.bucket);
                 return true;
             }
         }
@@ -3804,27 +3817,41 @@ module.exports = {
     Blockinit
 };
 
+const prevent_mismatch = {
+    no: 0,
+    part: 1,
+    all: 2
+};
+
+const error_project_level = {
+    all: 0,
+    without_not_place: 1,
+    no: 2
+};
+
 class Structure_Setting {
-    static structures = {};
+    static structures_dict = {}; 
+    static structures = [];       
     static structures_materials_layer_format = {};
 
-    constructor(name, pos, prevent_mismatch_level = 0, current_layer = 0) {
+    constructor(name, pos, prevent_mismatch_level = prevent_mismatch.no, current_layer = 0, project_level = error_project_level.all) {
         this.name = name;
-        this.structure = this.constructor.structures[this.name];
-
-        this.re_init(pos, prevent_mismatch_level, current_layer);
+        this.structure = this.constructor.structures_dict[this.name];
+        
+        this.re_init(pos, prevent_mismatch_level, current_layer, project_level);
     }
 
-    re_init(pos = null, prevent_mismatch_level = null, current_layer = null) {
+    re_init(pos = null, prevent_mismatch_level = null, current_layer = null, project_level = null) {
         if (pos !== null) this.pos = pos;
         if (prevent_mismatch_level !== null) this.prevent_mismatch_level = prevent_mismatch_level;
         if (current_layer !== null) this.current_layer = current_layer;
+        if (project_level !== null) this.project_level = project_level;
 
         this.all_block_air = [];
         this.all_block_without_air = [];
         this.all_block = [];
         
-        const structure = this.constructor.structures[this.name];
+        const structure = this.structure;
         const [size_x, size_y, size_z] = structure.size;
         const [pos_x, pos_y, pos_z, dimid] = this.pos;
 
@@ -3939,8 +3966,8 @@ class Structure_Setting {
         const files_list = File.getFilesList(structure_dir);
         for (const file of files_list) {
             if (file.endsWith(".mcstructure")) {
-                const file_name = file.slice(0, -12); // 去掉 .mcstructure 后缀
-                if (this.structures[file_name]) {
+                const file_name = file.slice(0, -12);
+                if (this.structures_dict[file_name]) {
                     continue;
                 }
 
@@ -3948,7 +3975,8 @@ class Structure_Setting {
                     const structure = Structure.load(structure_dir + '/' + file);
                     const size_y = structure.size[1];
                     
-                    this.structures[file_name] = structure;
+                    this.structures_dict[file_name] = structure;
+                    this.structures.push(structure);
                     
                     this.structures_materials_layer_format[file_name] = [];
                     for (let layer = 0; layer <= size_y; layer++) {
@@ -3960,8 +3988,12 @@ class Structure_Setting {
                     
                     logger.log(`已加载结构：${file} (大小${structure.size})`);
                 } catch (e) {
-                    if (this.structures[file_name]) {
-                        delete this.structures[file_name];
+                    if (this.structures_dict[file_name]) {
+                        delete this.structures_dict[file_name];
+                        const index = this.structures.indexOf(structure);
+                        if (index > -1) {
+                            this.structures.splice(index, 1);
+                        }
                     }
                     if (this.structures_materials_layer_format[file_name]) {
                         delete this.structures_materials_layer_format[file_name];
@@ -4009,6 +4041,7 @@ class PlayerSettings {
     static player_left(player) {
         if (PlayerSettings.players[player.uuid]) {
             delete PlayerSettings.players[player.uuid];
+            delete Container.item_check_info[player.uuid];
         }
     }
 }
@@ -4032,7 +4065,7 @@ class Ui {
         }
         const player_setting = PlayerSettings.players[uuid];
         
-        fm.addLabel(`当前已加载结构: ${Object.keys(Structure_Setting.structures).length}个 已绑定结构: ${player_setting.structures.length}个`);
+        fm.addLabel(`当前已加载结构: ${Structure_Setting.structures.length}个 已绑定结构: ${player_setting.structures.length}个`);
         fm.addButton("修改结构");
         fm.addButton("添加结构");
         fm.addButton("共享结构");
@@ -4097,34 +4130,27 @@ class Ui {
         
         const fm = mc.newCustomForm();
         fm.setTitle('轻松放置 - 添加结构');
+        const player_pos = player.blockPos;
+        fm.addLabel(`当前位置: (${player_pos.x}, ${player_pos.y}, ${player_pos.z})`);
         
+        const player_structues_dict = player_setting.structues_dict;
         const available_structures = [];
-        const bound_structure_names = new Set(player_setting.structures.map(struct => struct.name));
-        
-        for (const [structure_name, structure] of Object.entries(Structure_Setting.structures)) {
-            if (!bound_structure_names.has(structure_name)) {
-                const size_info = `${structure.size[0]}x${structure.size[1]}x${structure.size[2]}`;
-                available_structures.push([structure_name, size_info]);
+        for (const struct of Object.values(Structure_Setting.structures)) {
+            if (!player_structues_dict[struct.name]) {
+                available_structures.push(struct);
             }
         }
-        
+
         if (available_structures.length === 0) {
             fm.addLabel("暂无可用结构文件，请将.mcstructure文件放入structure文件夹");
             player.sendForm(fm, Ui.empty_callable);
             return;
         }
         
-        const structure_options = available_structures.map(([name, size]) => `${name} (大小: ${size})`);
+        const structure_options = available_structures.map(struct => `${struct.name} (大小: ${struct.size})`);
         fm.addDropdown("选择要添加的结构", structure_options);
-        
-        const player_pos = player.blockPos;
-        fm.addLabel(`当前位置: (${player_pos.x}, ${player_pos.y}, ${player_pos.z})`);
-        
-        fm.addInput("X偏移", "X轴偏移量", "0");
-        fm.addInput("Y偏移", "Y轴偏移量", "0");
-        fm.addInput("Z偏移", "Z轴偏移量", "0");
-        
         fm.addStepSlider("错误放置拦截程度", ["不拦截", "部分拦截", "完全拦截"], 0);
+        fm.addStepSlider("方块投影纠错程度", ["全投影", "部分投影", "不投影"], 0);
         
         player_setting.attached_data = {
             "available_structures": available_structures,
@@ -4226,6 +4252,11 @@ class Ui {
 • 错误统计: 在修改结构的ui中找到错误统计查看所有错误信息
 • 性能问题: 减少同时显示的结构数量或使用分层模式
 
+投影纠错设置:
+- 全投影: 显示所有类型的错误方块（未放置、类型不匹配、状态不匹配、容器状态/方块实体状态不匹配）
+- 部分投影: 不显示"未放置"类错误，只显示已放置但错误的方块
+- 不投影: 完全关闭错误方块投影显示
+
 拦截程度:
 - 不拦截: 允许在结构区域内自由放置任何方块
 - 部分拦截: 只拦截结构需要的方块放置错误
@@ -4280,7 +4311,10 @@ class Ui {
         }
         const player_setting = PlayerSettings.players[uuid];
         const structure_setting = player_setting.structures[id];
-        
+        Ui.modify_select(player, player_setting, structure_setting);
+    }
+
+    static modify_select(player, player_setting, structure_setting) {
         const fm = mc.newSimpleForm();
         fm.setTitle(`修改结构 - ${structure_setting.name}`);
         
@@ -4294,9 +4328,14 @@ class Ui {
         fm.addButton("向上一层");
         fm.addButton("向下一层");
         fm.addButton("移动到当前位置");
+
         fm.addButton("拦截程度设置：不拦截");
         fm.addButton("拦截程度设置：部分拦截");
         fm.addButton("拦截程度设置：完全拦截");
+
+        fm.addButton("投影纠错设置： 全投影");
+        fm.addButton("投影纠错设置： 部分投影");
+        fm.addButton("投影纠错设置： 不投影");
         
         fm.addButton("详细设置");
         
@@ -4328,30 +4367,24 @@ class Ui {
 
         const temp_data = player_setting.attached_data;
         
-        const selected_index = parseInt(data[0]);
-        const [structure_name] = temp_data["available_structures"][selected_index];
-        
-        const offset_x = parseInt(data[2]) ? parseInt(data[2]) : 0;
-        const offset_y = parseInt(data[3]) ? parseInt(data[3]) : 0;
-        const offset_z = parseInt(data[4]) ? parseInt(data[4]) : 0;
-        
-        const prevent_level = parseInt(data[5]);
-        
-        const [px, py, pz, pdimid] = temp_data["player_pos"];
-        const new_pos = [px + offset_x, py + offset_y, pz + offset_z, pdimid];
+        const structure = temp_data["available_structures"][parseInt(data[1])];
+        const prevent_level = parseInt(data[2]);
+        const project_level = parseInt(data[3]);
         
         const structure_setting = new Structure_Setting(
-            structure_name,
-            new_pos,
+            structure.name,
+            temp_data["player_pos"],
             prevent_level,
-            1
+            1,
+            project_level
         );
         
         player_setting.add_structure(structure_setting);
 
-        player.sendText(`✓ 成功添加结构: ${structure_name}`);
-        player.sendText(`  位置: ${new_pos.slice(0, 3)}`);
+        player.sendText(`✓ 成功添加结构: ${structure.name}`);
+        player.sendText(`  位置: ${structure_setting.pos.slice(0, 3)}`);
         player.sendText(`  拦截程度: ${["不拦截", "部分拦截", "完全拦截"][prevent_level]}`);
+        player.sendText(`  投影程度: ${["全投影", "部分投影", "不投影"][project_level]}`)
     }
 
     static form_share_structure_callable(player, data, reason) {
@@ -4388,6 +4421,8 @@ class Ui {
         } else {
             player.sendText(`未找到玩家 或许已离开`);
         }
+
+        Ui.show_share_structure_form(player);
     }
 
     static form_remove_structure_callable(player, data, reason) {
@@ -4433,42 +4468,49 @@ class Ui {
         
         if (id === 0) {
             const size_y = structure_setting.structure.size[1];
-            structure_setting.re_init(null, null, (structure_setting.current_layer + 1) % (size_y + 1));
+            structure_setting.re_init(null, null, (structure_setting.current_layer + 1) % (size_y + 1), null);
+            Ui.modify_select(player, player_setting, structure_setting);
         } else if (id === 1) {
             const size_y = structure_setting.structure.size[1];
-            structure_setting.re_init(null, null, (structure_setting.current_layer + size_y) % (size_y + 1));
+            structure_setting.re_init(null, null, (structure_setting.current_layer + size_y) % (size_y + 1), null);
+            Ui.modify_select(player, player_setting, structure_setting);
         } else if (id === 2) {
             const pos = player.blockPos;
             structure_setting.re_init([pos.x, pos.y, pos.z, pos.dimid], null, null);
+            Ui.modify_select(player, player_setting, structure_setting);
         } else if (id >= 3 && id <= 5) {
-            structure_setting.re_init(null, id - 3, null);
-        } else if (id === 6) {
+            structure_setting.re_init(null, id - 3, null, null);
+            Ui.modify_select(player, player_setting, structure_setting);
+        }  else if (id >= 6 && id <= 8) { // 修改范围
+            structure_setting.re_init(null, null, null, id - 6);
+            Ui.modify_select(player, player_setting, structure_setting);
+        } else if (id === 9) {
             Ui.show_detail_settings_form(player, structure_setting);
-        } else if (id === 7) {
+        } else if (id === 10) {
             const fm = mc.newSimpleForm();
             fm.setContent(Structure_Setting.structures_materials_layer_format[structure_setting.name][0]);
             player.sendForm(fm, Ui.empty_callable);
-        } else if (id === 8) {
+        } else if (id === 11) {
             const fm = mc.newSimpleForm();
             fm.setContent(structure_setting.get_current_lalyer_all_materials());
             player.sendForm(fm, Ui.empty_callable);
-        } else if (id === 9) {
+        } else if (id === 12) {
             const fm = mc.newSimpleForm();
             fm.setContent(Ui.format_materials_for_display(structure_setting.get_needed_materials()));
             player.sendForm(fm, Ui.empty_callable);
-        } else if (id === 10) {
+        } else if (id === 13) {
             const fm = mc.newSimpleForm();
             const container = new Container(player.getInventory());
             fm.setContent(Ui.format_materials_for_display(container.get_miss_item(structure_setting.get_needed_materials())));
             player.sendForm(fm, Ui.empty_callable);
-        } else if (id >= 11 && id <= 12) {
+        } else if (id >= 14 && id <= 15) {
             const error_stats = [0, 0, 0, 0];
             const error_info = [];  
             let total_errors = 0;
             
             let layer = structure_setting.current_layer;
-            if (id === 12) {
-                structure_setting.re_init(null, null, layer);
+            if (id === 15) {
+                structure_setting.re_init(null, null, 0, null);
             }
             
             for (const [rel_pos, pos, intpos] of structure_setting.all_block) {
@@ -4491,8 +4533,8 @@ class Ui {
                 }
             }
             
-            if (id === 12) {
-                structure_setting.re_init(null, null, layer);
+            if (id === 15) {
+                structure_setting.re_init(null, null, layer, null);
             }
             
             const fm = mc.newSimpleForm();
@@ -4640,11 +4682,76 @@ class Ui {
     }
 }
 
-class TickEvent {
+class Project {
     static init() {
-        this.tick = 0;
         this.ps = mc.newParticleSpawner();
+    }
+
+    static project(tick) {
+        const ps = this.ps;
+        const project_info = [];
         
+        const all_structure_settings = new Set();
+        for (const player of Object.values(PlayerSettings.players)) {
+            for (const structure_setting of player.structures) {
+                if (structure_setting.project_level !== error_project_level.no) {
+                    all_structure_settings.add(structure_setting);
+                }
+            }
+        }
+        
+        for (const structure_setting of all_structure_settings) {
+            const structure = structure_setting.structure;
+            const project_level = structure_setting.project_level;
+            
+            const length = structure_setting.all_block_air.length;
+            const chunk_size = Math.ceil(length / 30);
+            const chunk_start = chunk_size * (tick % 30);
+            
+            for (let i = chunk_start; i < Math.min(chunk_start + chunk_size, length); i++) {
+                const [rel_pos, pos, intpos] = structure_setting.all_block_air[i];
+                const mc_block = mc.getBlock(intpos);
+                if (!mc_block) continue;
+                
+                if (mc_block.type !== 'minecraft:air') {
+                    project_info.push(["ap:2_", intpos]);
+                }
+            }
+            
+            const length2 = structure_setting.all_block_without_air.length;
+            const chunk_size2 = Math.ceil(length2 / 30);
+            const chunk_start2 = chunk_size2 * (tick % 30);
+            
+            for (let i = chunk_start2; i < Math.min(chunk_start2 + chunk_size2, length2); i++) {
+                const [rel_pos, pos, intpos] = structure_setting.all_block_without_air[i];
+                const mc_block = mc.getBlock(intpos);
+                if (!mc_block) continue;
+                
+                if (mc_block.type === 'minecraft:air') {
+                    if (project_level !== error_project_level.without_not_place) {
+                        project_info.push(["ap:1_", intpos]);
+                    }
+                } else {
+                    const match_res = Block.match(structure.get_block_no_check(rel_pos), mc_block);
+                    if (match_res <= 3) {
+                        const particle = ["ap:1_", "ap:2_", "ap:3_", "ap:4_"][match_res];
+                        project_info.push([particle, intpos]);
+                    }
+                }
+            }
+        }
+        
+        for (const [particle, intpos] of project_info) {
+            ps.spawnParticle(intpos, particle + "1");
+            ps.spawnParticle(intpos, particle + "2");
+            ps.spawnParticle(intpos, particle + "5");
+            ps.spawnParticle(intpos, particle + "6");
+        }
+    }
+}
+
+class Quick_place {
+    static init() {
         const r = 6;
         const r_sq = r * r;
         this.positions = [];
@@ -4663,91 +4770,8 @@ class TickEvent {
         this.positions.sort((a, b) => a[1] - b[1] || a[3] - b[3]);
     }
 
-    static tick_event() {
-        TickEvent.tick = TickEvent.tick + 1;
-        try {
-            TickEvent.project();
-            TickEvent.set_line_range();
-        } catch (e) {
-            logger.log(e);
-        }
-    }
-
-    static project() {
-        const ps = this.ps;
-        const processed_pos = new Set();
-        
-        const all_structure_settings = new Set();
-        for (const player of Object.values(PlayerSettings.players)) {
-            for (const structure_setting of player.structures) {
-                all_structure_settings.add(structure_setting);
-            }
-        }
-        
-        for (const structure_setting of all_structure_settings) {
-            const structure = structure_setting.structure;
-            const length = structure_setting.all_block_air.length;
-            const chunk_size = Math.ceil(length / 30);
-            const chunk_start = chunk_size * (this.tick % 30);
-            
-            for (let i = chunk_start; i < Math.min(chunk_start + chunk_size, length); i++) {
-                const [rel_pos, pos, intpos] = structure_setting.all_block_air[i];
-                const pos_str = pos.join(',');
-                
-                if (processed_pos.has(pos_str)) {
-                    continue;
-                }
-                
-                const mc_block = mc.getBlock(intpos);
-                if (!mc_block) {
-                    continue;
-                }
-                
-                if (mc_block.type !== 'minecraft:air') {
-                    processed_pos.add(pos_str);
-                    ps.spawnParticle(intpos, "ap:2_1");
-                    ps.spawnParticle(intpos, "ap:2_2");
-                    ps.spawnParticle(intpos, "ap:2_5");
-                    ps.spawnParticle(intpos, "ap:2_6");
-                }
-            }
-            
-            const length2 = structure_setting.all_block_without_air.length;
-            const chunk_size2 = Math.ceil(length2 / 30);
-            const chunk_start2 = chunk_size2 * (this.tick % 30);
-            
-            for (let i = chunk_start2; i < Math.min(chunk_start2 + chunk_size2, length2); i++) {
-                const [rel_pos, pos, intpos] = structure_setting.all_block_without_air[i];
-                const pos_str = pos.join(',');
-                
-                const mc_block = mc.getBlock(intpos);
-                if (!mc_block) {
-                    continue;
-                }
-                
-                if (mc_block.type === 'minecraft:air') {
-                    processed_pos.add(pos_str);
-                    ps.spawnParticle(intpos, "ap:1_1");
-                    ps.spawnParticle(intpos, "ap:1_2");
-                    ps.spawnParticle(intpos, "ap:1_5");
-                    ps.spawnParticle(intpos, "ap:1_6");
-                } else {
-                    const match_res = Block.match(structure.get_block_no_check(rel_pos), mc_block);
-                    const particle = ["ap:1_", "ap:2_", "ap:3_", "ap:4_", ""][match_res];
-                    if (particle) {
-                        processed_pos.add(pos_str);
-                        ps.spawnParticle(intpos, particle + "1");
-                        ps.spawnParticle(intpos, particle + "2");
-                        ps.spawnParticle(intpos, particle + "5");
-                        ps.spawnParticle(intpos, particle + "6");
-                    }
-                }
-            }
-        }
-    }
-
-    static set_line_range() {
-        if (this.tick % 2 === 0) {
+    static place(tick) {
+        if (tick % 2 === 0) {
             return;
         }
         
@@ -4839,7 +4863,7 @@ class TickEvent {
         const pc = new Container(player.getInventory());
         Container.current_player_mode = player.gameMode;
         Container.current_player = player;
-        Container.send_info = false;
+        Container.send_info = true;
         
         for (let i = 0; i < max_distance * 4; i++) {
             if (this.set_block_player_setting(pc, player, player_setting, new IntPos(block_x, block_y, block_z, dimid))) {
@@ -4881,7 +4905,7 @@ class TickEvent {
 
         Container.current_player_mode = player.gameMode;
         Container.current_player = player;
-        Container.send_info = false;
+        Container.send_info = true;
         const pc = new Container(player.getInventory());
         for (const [dx, dy, dz, dis] of this.positions) {
             if (dx * dir_x + dy * dir_y + dz * dir_z > cos_threshold * dis) {
@@ -4919,6 +4943,41 @@ class TickEvent {
             }
         }
         return false;
+    }
+}
+
+class TickEvent {
+    static init() {
+        this.tick = 0;
+        this.ps = mc.newParticleSpawner();
+        
+        const r = 6;
+        const r_sq = r * r;
+        this.positions = [];
+        
+        for (let dy = -r; dy <= r; dy++) {
+            for (let dx = -r; dx <= r; dx++) {
+                for (let dz = -r; dz <= r; dz++) {
+                    const dis = dx * dx + dy * dy + dz * dz;
+                    if (dis <= r_sq) {
+                        this.positions.push([dx, dy, dz, Math.sqrt(dis)]);
+                    }
+                }
+            }
+        }
+
+        this.positions.sort((a, b) => a[1] - b[1] || a[3] - b[3]);
+    }
+
+    static tick_event() {
+        TickEvent.tick = TickEvent.tick + 1;
+        try {
+            Project.project(TickEvent.tick);
+            Quick_place.place(TickEvent.tick);
+            Container.current_tick = TickEvent.tick;
+        } catch (e) {
+            logger.log(e);
+        }
     }
 }
 
@@ -4971,9 +5030,9 @@ function set_block(player, pos) {
                 return [true, true];
             }
 
-            prevent = structure_setting.prevent_mismatch_level !== 0;
+            prevent = structure_setting.prevent_mismatch_level !== prevent_mismatch.no;
         } else {
-            prevent = structure_setting.prevent_mismatch_level === 2;
+            prevent = structure_setting.prevent_mismatch_level === prevent_mismatch.all;
         }
     }
 
@@ -4996,10 +5055,17 @@ ui_command.overload([]);
 ui_command.setCallback(Ui.show_main_form);
 ui_command.setup();
 
+const ui_command_ep = mc.newCommand('ep', 'ep', PermType.Any);
+ui_command_ep.overload([]);
+ui_command_ep.setCallback(Ui.show_main_form);
+ui_command_ep.setup();
+
 function init() {
     try {
         logger.log('轻松放置 初始化加载结构中');
         Blockinit();
+        Project.init();
+        Quick_place.init();
         TickEvent.init();
         Structure_Setting.get_structure_files();
     } catch (e) {

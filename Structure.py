@@ -346,6 +346,8 @@ class StructureBlock:
         self.compability_version = compability_version
         self.identifier = f'{namespace}:{base_name}'
         self.state_str = self.identifier + str(states)
+        
+        self.is_air = self.identifier == 'minecraft:air'
 
     @classmethod
     def from_identifier(
@@ -370,8 +372,10 @@ class Structure:
     def __init__(
         self,
         size: tuple[int, int, int],
+        name: str
     ):
         self.size = size
+        self.name = name
         self.x, self.y, self.z = size
         self.total_size = size[0] * size[1] * size[2]
         self.yz = self.y * self.z
@@ -386,7 +390,7 @@ class Structure:
             nbt: dict = _into_pyobj(NBTFile(f.read())) # type: ignore
             
         size: tuple[int, int, int] = tuple(nbt["size"])
-        struct = cls(size)
+        struct = cls(size, file.split('/')[-1].replace('.mcstructure',''))
         struct.structure_indecis = nbt["structure"]["block_indices"][0]
         struct._palette = [
                 StructureBlock.from_identifier(block["name"], block["states"], block["version"])
