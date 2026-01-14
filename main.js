@@ -22,14 +22,14 @@ class Structure_Setting {
     static structures = [];       
     static structures_materials_layer_format = {};
 
-    constructor(name, pos, prevent_mismatch_level = prevent_mismatch.no, current_layer = 0, project_level = error_project_level.all) {
+    constructor(name, pos, current_layer = 0, prevent_mismatch_level = prevent_mismatch.no, project_level = error_project_level.all) {
         this.name = name;
         this.structure = this.constructor.structures_dict[this.name];
         
-        this.re_init(pos, prevent_mismatch_level, current_layer, project_level);
+        this.re_init(pos, current_layer, prevent_mismatch_level, project_level);
     }
 
-    re_init(pos = null, prevent_mismatch_level = null, current_layer = null, project_level = null) {
+    re_init(pos = null, current_layer = null, prevent_mismatch_level = null, project_level = null) {
         if (pos !== null) this.pos = pos;
         if (prevent_mismatch_level !== null) this.prevent_mismatch_level = prevent_mismatch_level;
         if (current_layer !== null) this.current_layer = current_layer;
@@ -562,8 +562,8 @@ class Ui {
         const structure_setting = new Structure_Setting(
             structure.name,
             temp_data["player_pos"],
-            prevent_level,
             1,
+            prevent_level,
             project_level
         );
         
@@ -656,18 +656,18 @@ class Ui {
         
         if (id === 0) {
             const size_y = structure_setting.structure.size[1];
-            structure_setting.re_init(null, null, (structure_setting.current_layer + 1) % (size_y + 1), null);
+            structure_setting.re_init(null, (structure_setting.current_layer + 1) % (size_y + 1), null, null);
             Ui.modify_select(player, player_setting, structure_setting);
         } else if (id === 1) {
             const size_y = structure_setting.structure.size[1];
-            structure_setting.re_init(null, null, (structure_setting.current_layer + size_y) % (size_y + 1), null);
+            structure_setting.re_init(null, (structure_setting.current_layer + size_y) % (size_y + 1), null, null);
             Ui.modify_select(player, player_setting, structure_setting);
         } else if (id === 2) {
             const pos = player.blockPos;
-            structure_setting.re_init([pos.x, pos.y, pos.z, pos.dimid], null, null);
+            structure_setting.re_init([pos.x, pos.y, pos.z, pos.dimid], null, null, null);
             Ui.modify_select(player, player_setting, structure_setting);
         } else if (id >= 3 && id <= 5) {
-            structure_setting.re_init(null, id - 3, null, null);
+            structure_setting.re_init(null, null, id - 3, null);
             Ui.modify_select(player, player_setting, structure_setting);
         }  else if (id >= 6 && id <= 8) { // 修改范围
             structure_setting.re_init(null, null, null, id - 6);
@@ -698,7 +698,7 @@ class Ui {
             
             let layer = structure_setting.current_layer;
             if (id === 15) {
-                structure_setting.re_init(null, null, 0, null);
+                structure_setting.re_init(null, 0, null, null);
             }
             
             for (const [rel_pos, pos, intpos] of structure_setting.all_block) {
@@ -722,7 +722,7 @@ class Ui {
             }
             
             if (id === 15) {
-                structure_setting.re_init(null, null, layer, null);
+                structure_setting.re_init(null, layer, null, null);
             }
             
             const fm = mc.newSimpleForm();
@@ -763,13 +763,16 @@ class Ui {
         fm.addInput("X偏移", "X轴偏移量", "0");
         fm.addInput("Y偏移", "Y轴偏移量", "0");
         fm.addInput("Z偏移", "Z轴偏移量", "0");
-        
-        const default_prevent = structure_setting.prevent_mismatch_level;
-        fm.addStepSlider("错误放置拦截程度", ["不拦截", "部分拦截", "完全拦截"], default_prevent);
-        
+
         const default_layer = structure_setting.current_layer;
         const max_layers = structure_obj ? structure_obj.size[1] : 1;
         fm.addSlider("放置层数(0=全部)", 0, Math.max(max_layers, 1), 1, default_layer);
+        
+        const default_prevent = structure_setting.prevent_mismatch_level;
+        fm.addStepSlider("错误放置拦截程度", ["不拦截", "部分拦截", "完全拦截"], default_prevent);
+
+        const default_project = structure_setting.project_level;
+        fm.addStepSlider("方块投影纠错程度", ["全投影", "部分投影", "不投影"], default_project);
         
         player.sendForm(fm, Ui.form_add_modify_structure);
     }
@@ -797,10 +800,10 @@ class Ui {
         
         pos = [pos[0] + parseInt(data[2]), pos[1] + parseInt(data[3]), pos[2] + parseInt(data[4]), pos[3]];
         
-        const prevent_level = parseInt(data[5]);
-        const current_layer = parseInt(data[6]);
+        const current_layer = parseInt(data[5]);
+        const prevent_level = parseInt(data[6]);
         const project_level = parseInt(data[7]);
-        structure_setting.re_init(pos, prevent_level, current_layer, project_level);
+        structure_setting.re_init(pos, current_layer, prevent_level, project_level);
         
         player.sendText(`成功修改结构设置: ${structure_setting.name}`);
     }
