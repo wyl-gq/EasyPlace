@@ -4085,7 +4085,6 @@ class Ui:
         player_setting = PlayerSettings.players[uuid]
         
         structure_setting: Structure_Setting = player_setting.attached_data["current_structure"]
-        structure_name = structure_setting.name
         
         use_current_player_pos = bool(data[1])
         if use_current_player_pos:
@@ -4100,16 +4099,8 @@ class Ui:
         prevent_level = int(data[6])
         project_level = int(data[7])
         
-        structure_setting = Structure_Setting(
-            name=structure_name,
-            pos=pos,
-            current_layer=current_layer,
-            prevent_level=prevent_mismatch(prevent_level),
-            project_level=error_project_level(project_level),
-        )
-        
-        player_setting.add_structure(structure_setting)
-        player.sendText(f"成功修改结构设置: {structure_name}")
+        structure_setting.re_init(pos, current_layer, prevent_mismatch(prevent_level), error_project_level(project_level))
+        player.sendText(f"成功修改结构设置: {structure_setting.name}")
     
     @staticmethod
     def empty_callable(*args) -> None:

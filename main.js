@@ -786,8 +786,6 @@ class Ui {
         const player_setting = PlayerSettings.players[uuid];
         
         const structure_setting = player_setting.attached_data["current_structure"];
-        const structure_name = structure_setting.name;
-        
         const use_current_player_pos = Boolean(data[1]);
         let pos;
         if (use_current_player_pos) {
@@ -801,16 +799,10 @@ class Ui {
         
         const prevent_level = parseInt(data[5]);
         const current_layer = parseInt(data[6]);
+        const project_level = parseInt(data[7]);
+        structure_setting.re_init(pos, prevent_level, current_layer, project_level);
         
-        const new_structure_setting = new Structure_Setting(
-            structure_name,
-            pos,
-            prevent_level,
-            current_layer
-        );
-        
-        player_setting.add_structure(new_structure_setting);
-        player.sendText(`成功修改结构设置: ${structure_name}`);
+        player.sendText(`成功修改结构设置: ${structure_setting.name}`);
     }
 
     static empty_callable(...args) {
